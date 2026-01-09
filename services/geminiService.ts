@@ -7,15 +7,20 @@ export const generateReminderMessage = async (memberName: string, amount: number
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Genera un recordatorio de WhatsApp educado y amigable para ${memberName} sobre su pago de $${amount} para la suscripción de ${serviceName}. El mensaje debe estar en español, ser corto y conciso.`,
+      contents: `Genera un mensaje de WhatsApp para recordar un pago pendiente. 
+      Destinatario: ${memberName}. 
+      Monto: $${amount}. 
+      Servicio: ${serviceName}. 
+      Tono: Muy amigable, educado y breve. En español. 
+      Evita sonar agresivo o formal, debe parecer un amigo recordándole a otro.`,
       config: {
-        temperature: 0.7,
-        maxOutputTokens: 100,
+        temperature: 0.8,
+        maxOutputTokens: 120,
       }
     });
-    return response.text?.trim() || `¡Hola ${memberName}! Solo paso a recordarte el pago de ${serviceName}. ¿Podrías enviar los $${amount} cuando tengas un momento? ¡Gracias!`;
+    return response.text?.trim() || `¡Hola ${memberName}! Solo paso a recordarte el pago de ${serviceName} ($${amount}). ¿Podrías enviarlo cuando puedas? ¡Gracias!`;
   } catch (error) {
-    console.error("Error al generar recordatorio con IA:", error);
-    return `¡Hola ${memberName}! Solo paso a recordarte el pago de ${serviceName}. ¿Podrías enviar los $${amount} cuando tengas un momento? ¡Gracias!`;
+    console.error("Gemini Error:", error);
+    return `¡Hola ${memberName}! Recordatorio amigable del pago de ${serviceName} por $${amount}. ¡Gracias!`;
   }
 };

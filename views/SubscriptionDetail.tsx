@@ -26,7 +26,7 @@ const SubscriptionDetail: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#0d141b]">
       <TopNav />
       <main className="flex-1 w-full max-w-[1200px] mx-auto px-4 md:px-8 py-8">
         <nav className="flex items-center gap-2 text-sm mb-6">
@@ -37,7 +37,7 @@ const SubscriptionDetail: React.FC = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-1 space-y-6">
-            <div className="bg-surface-light dark:bg-surface-dark rounded-2xl border border-border-light dark:border-border-dark p-6 shadow-sm overflow-hidden relative">
+            <div className="bg-white dark:bg-surface-dark rounded-2xl border border-border-light dark:border-border-dark p-6 shadow-sm overflow-hidden relative">
               <div className="absolute top-0 left-0 w-full h-2" style={{ backgroundColor: subscription.color }}></div>
               <div className="flex flex-col items-center text-center mt-4">
                 <div 
@@ -68,11 +68,11 @@ const SubscriptionDetail: React.FC = () => {
               </div>
 
               <div className="mt-8 grid grid-cols-2 gap-3">
-                <button className="flex items-center justify-center gap-2 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                <button type="button" className="flex items-center justify-center gap-2 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
                   <span className="material-symbols-outlined text-[18px]">edit</span>
                   Editar
                 </button>
-                <button className="flex items-center justify-center gap-2 h-10 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm font-bold hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors">
+                <button type="button" className="flex items-center justify-center gap-2 h-10 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm font-bold hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors">
                   <span className="material-symbols-outlined text-[18px]">pause_circle</span>
                   Pausar
                 </button>
@@ -81,15 +81,19 @@ const SubscriptionDetail: React.FC = () => {
           </div>
 
           <div className="lg:col-span-2 space-y-6">
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center px-1">
                 <h2 className="text-xl font-bold text-slate-900 dark:text-white">Miembros Activos</h2>
-                <button className="text-sm font-bold text-primary hover:underline flex items-center gap-1">
+                <button 
+                  type="button"
+                  onClick={() => navigate(`/add-member/${subscription.id}`)}
+                  className="group flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-bold shadow-lg shadow-primary/20 transition-all active:scale-95"
+                >
                     <span className="material-symbols-outlined text-[18px]">person_add</span>
                     Añadir Miembro
                 </button>
             </div>
 
-            <div className="bg-surface-light dark:bg-surface-dark rounded-2xl border border-border-light dark:border-border-dark shadow-sm overflow-hidden">
+            <div className="bg-white dark:bg-surface-dark rounded-2xl border border-border-light dark:border-border-dark shadow-sm overflow-hidden">
               <table className="w-full">
                 <thead>
                   <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-border-light dark:border-border-dark">
@@ -126,6 +130,7 @@ const SubscriptionDetail: React.FC = () => {
                         <div className="flex justify-end gap-2">
                             {member.status !== PaymentStatus.PAID && (
                                 <button 
+                                    type="button"
                                     onClick={() => navigate(`/send-reminder/${member.id}`)}
                                     className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-colors"
                                     title="Recordar miembro"
@@ -133,7 +138,7 @@ const SubscriptionDetail: React.FC = () => {
                                     <span className="material-symbols-outlined text-[20px]">notifications_active</span>
                                 </button>
                             )}
-                            <button className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg transition-colors">
+                            <button type="button" className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg transition-colors">
                                 <span className="material-symbols-outlined text-[20px]">more_vert</span>
                             </button>
                         </div>
