@@ -1,0 +1,7 @@
+{
+  "name": "Strimo - Admin y Gestión de Gastos",
+  "description": "Un panel administrativo de alta gama para gestionar suscripciones compartidas, rastrear pagos de miembros y automatizar recordatorios con mensajería impulsada por IA.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
