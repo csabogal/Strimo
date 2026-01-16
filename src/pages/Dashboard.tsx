@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Wallet, AlertCircle, CheckCircle2, Sparkles, Send, Mail, Trash2 } from 'lucide-react'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import Groq from 'groq-sdk'
 import { supabase } from '../lib/supabase'
 import { Button } from '../components/ui/Button'
 import { useState } from 'react'
@@ -9,7 +9,7 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
-const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY)
+// ... imports
 
 export const Dashboard = () => {
     const [aiInsight, setAiInsight] = useState<string>('')
@@ -169,31 +169,51 @@ export const Dashboard = () => {
 
     const generateInsights = async () => {
         if (!platforms || !members) return
+
+        const apiKey = import.meta.env.VITE_GROQ_API_KEY
+        if (!apiKey) {
+            toast.error('Falta API Key de Groq')
+            return
+        }
+
         setIsGenerating(true)
         try {
-            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
-            const prompt = `
-            Actúa como un asistente financiero para una app de suscripciones llamada Strimo.
-            Datos actuales:
-            - Total mensual en suscripciones: ${formatCurrency(totalCost)}
-            - Plataformas activas: ${platforms.map((p: any) => p.name).join(', ')}
-            - Número de miembros: ${members.length}
-            
-            Analiza estos gastos y dame 3 consejos breves o "insights" para optimizar o gestionar mejor estos pagos. 
-            Sé conciso, amigable y usa un tono premium/profesional. Formato lista.
-        `
-            const result = await model.generateContent(prompt)
-            const response = result.response
-            setAiInsight(response.text())
-        } catch (error) {
-            console.error("Error Gemini:", error)
-            setAiInsight("Lo siento, no pude generar insights en este momento.")
+            const groq = new Groq({ apiKey, dangerouslyAllowBrowser: true })
+            const prompt = `Actúa como un asistente financiero para una app de suscripciones llamada Strimo.
+Datos actuales:
+- Total mensual en suscripciones: ${formatCurrency(totalCost)}
+- Plataformas activas: ${platforms.map((p: any) => p.name).join(', ')}
+- Número de miembros: ${members.length}
+
+Analiza estos gastos y dame 3 consejos breves o "insights" para optimizar o gestionar mejor estos pagos.
+Sé conciso, amigable y usa un tono premium/profesional. Formato lista.`
+
+            const completion = await groq.chat.completions.create({
+                messages: [{ role: 'user', content: prompt }],
+                model: 'llama-3.3-70b-versatile',
+                temperature: 0.7,
+                max_tokens: 500
+            })
+
+            setAiInsight(completion.choices[0]?.message?.content || 'No se pudo generar respuesta.')
+        } catch (error: any) {
+            console.error("Error Groq:", error)
+            let msg = "No pude generar insights."
+            if (error.message?.includes('429')) msg = "Límite de uso de IA excedido. Intenta en 1 min."
+            setAiInsight(msg)
+            if (error.message?.includes('429')) toast.warning("Cuota gratuita agotada temporalmente.")
         } finally {
             setIsGenerating(false)
         }
     }
 
     const generateReminder = async () => {
+        const apiKey = import.meta.env.VITE_GROQ_API_KEY
+        if (!apiKey) {
+            toast.error('Falta la API Key de Groq (VITE_GROQ_API_KEY)')
+            return
+        }
+
         if (!groupedChargesList || groupedChargesList.length === 0) {
             toast.info('No hay cobros pendientes para generar recordatorios.')
             return
@@ -201,32 +221,46 @@ export const Dashboard = () => {
 
         setIsGeneratingReminder(true)
         try {
-            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
+            const groq = new Groq({ apiKey, dangerouslyAllowBrowser: true })
 
-            // Use grouped list for cleaner summary
-            const debtSummary = groupedChargesList.map((g: any) =>
-                `- ${g.member?.name} debe un total de ${formatCurrency(g.totalAmount)} por: ${g.platforms.join(', ')} (Vence: ${format(new Date(g.dueDate), 'dd/MM')})`
-            ).join('\n')
+            // Use grouped list for cleaner summary and filter out potential undefined values
+            const debtSummary = groupedChargesList.map((g: any) => {
+                const platformsList = g.platforms.filter((p: any) => p).join(', ') || 'Suscripción'
+                const dateStr = g.dueDate ? format(new Date(g.dueDate), 'dd/MM') : 'Pendiente'
+                return `- ${g.member?.name || 'Miembro'} debe un total de ${formatCurrency(g.totalAmount)} por: ${platformsList} (Vence: ${dateStr})`
+            }).join('\n')
 
-            const prompt = `
-            Genera un mensaje amable pero firme para enviar por WhatsApp a los miembros del grupo de suscripciones "Strimo".
-            
-            Lista de deudas pendientes (RESUMIDA POR PERSONA):
-            ${debtSummary}
-            
-            El mensaje debe:
-            1. Saludar al grupo.
-            2. Listar lo que debe cada uno (total y conceptos) de forma clara y organizada.
-            3. Recordar pagar antes de la fecha límite.
-            4. Incluir emojis relevantes.
-            5. No uses introducciones como "Aquí tienes el mensaje", solo dame el texto listo para copiar.
-        `
-            const result = await model.generateContent(prompt)
-            setAiInsight(result.response.text())
+            const prompt = `Genera un mensaje amable pero firme para enviar por WhatsApp a los miembros del grupo de suscripciones "Strimo".
+
+Lista de deudas pendientes (RESUMIDA POR PERSONA):
+${debtSummary}
+
+El mensaje debe:
+1. Saludar al grupo.
+2. Listar lo que debe cada uno (total y conceptos) de forma clara y organizada.
+3. Recordar pagar antes de la fecha límite.
+4. Incluir emojis relevantes.
+5. No uses introducciones como "Aquí tienes el mensaje", solo dame el texto listo para copiar.
+6. IMPORTANTE: La moneda es pesos colombianos (COP), usa el formato $ 0.000`
+
+            const completion = await groq.chat.completions.create({
+                messages: [{ role: 'user', content: prompt }],
+                model: 'llama-3.3-70b-versatile',
+                temperature: 0.8,
+                max_tokens: 800
+            })
+
+            const responseText = completion.choices[0]?.message?.content || 'No se pudo generar el mensaje.'
+            setAiInsight(responseText)
             toast.success('Mensaje de cobro generado')
-        } catch (error) {
-            console.error("Error Gemini:", error)
-            toast.error("Error generando recordatorio")
+        } catch (error: any) {
+            console.error("Error Groq:", error)
+            let msg = "Error generando recordatorio"
+            if (error.message?.includes('API key')) msg = "API Key de Groq inválida"
+            if (error.message?.includes('429')) msg = "Límite de uso excedido (Cuota Gratuita)"
+            if (error.message?.includes('503')) msg = "Servicio de IA saturado"
+
+            toast.error(`${msg}. Por favor espera un momento.`)
         } finally {
             setIsGeneratingReminder(false)
         }
@@ -425,7 +459,7 @@ export const Dashboard = () => {
                         </div>
                     ) : (
                         <div className="flex-1 flex items-center justify-center text-slate-500 text-center text-sm">
-                            Usa "IA Cobranza" o "Ver Insights" para obtener ayuda de Gemini.
+                            Usa "IA Cobranza" o "Ver Insights" para obtener ayuda de la IA.
                         </div>
                     )}
                 </div>
