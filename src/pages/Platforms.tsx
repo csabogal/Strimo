@@ -150,7 +150,10 @@ export const Platforms = () => {
                                     <div>
                                         <h3 className="font-bold text-white text-lg">{platform.name}</h3>
                                         <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
-                                            {platform.billing_cycle === 'monthly' ? 'Mensual' : 'Anual'}
+                                            {platform.billing_cycle === 'monthly' ? 'Mensual' :
+                                                platform.billing_cycle === 'yearly' ? 'Anual' :
+                                                    !isNaN(Number(platform.billing_cycle)) ? `Día ${platform.billing_cycle}` :
+                                                        platform.billing_cycle}
                                         </span>
                                     </div>
                                 </div>

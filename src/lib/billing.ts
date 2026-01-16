@@ -23,8 +23,13 @@ export const generateMonthlyCharges = async (month: number, year: number) => {
             
             if (sError || !subs || subs.length === 0) continue
 
-            const dueDate = new Date(year, month - 1, parseInt(platform.billing_cycle || '1'))
-            const dateStr = dueDate.toISOString().split('T')[0] // simplified due date
+            const cycleDay = parseInt(platform.billing_cycle || '1')
+            // Get last day of the specific month (month is 1-indexed here, so using 'month' as index gives the 0th day of next month = last day of current)
+            const daysInCurrentMonth = new Date(year, month, 0).getDate()
+            const actualDay = Math.min(cycleDay, daysInCurrentMonth)
+            
+            const dueDate = new Date(year, month - 1, actualDay)
+            const dateStr = dueDate.toISOString().split('T')[0]
 
             if (platform.payment_strategy === 'equal') {
                 // Everyone gets a charge of share_cost

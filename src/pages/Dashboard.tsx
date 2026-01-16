@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Wallet, AlertCircle, CheckCircle2, Sparkles, Send, Mail } from 'lucide-react'
+import { Wallet, AlertCircle, CheckCircle2, Sparkles, Send, Mail, Trash2 } from 'lucide-react'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { supabase } from '../lib/supabase'
 import { Button } from '../components/ui/Button'
@@ -42,7 +42,7 @@ export const Dashboard = () => {
         queryFn: async () => {
             const { data } = await supabase
                 .from('charges')
-                .select('*, members(name), platforms(name)')
+                .select('*, members(name, email, phone), platforms(name)')
                 .eq('status', 'pending')
                 .order('due_date', { ascending: true })
             return data || []
@@ -80,40 +80,85 @@ export const Dashboard = () => {
         }).format(amount)
     }
 
-    const handleMarkAsPaid = async (charge: any) => {
-        if (!confirm(`¿Confirmar pago de ${formatCurrency(charge.amount)} por ${charge.members?.name}?`)) return;
+    // Group charges by member
+    const groupedCharges = pendingCharges?.reduce((acc: any, charge: any) => {
+        const memberId = charge.member_id
+        if (!acc[memberId]) {
+            acc[memberId] = {
+                memberId,
+                member: charge.members,
+                totalAmount: 0,
+                platforms: [],
+                chargeIds: [],
+                dueDate: charge.due_date,
+                charges: [] // Keep original charges for individual processing if needed
+            }
+        }
+        acc[memberId].totalAmount += charge.amount
+        acc[memberId].platforms.push(charge.platforms?.name)
+        acc[memberId].chargeIds.push(charge.id)
+        acc[memberId].charges.push(charge)
+        // Keep the earliest due date
+        if (new Date(charge.due_date) < new Date(acc[memberId].dueDate)) {
+            acc[memberId].dueDate = charge.due_date
+        }
+        return acc
+    }, {})
 
-        // 1. Update charge status
-        const { error: chargeError } = await supabase
+    const groupedChargesList = Object.values(groupedCharges || {})
+
+    const handleMarkAsPaidGroup = async (group: any) => {
+        if (!confirm(`¿Confirmar pago TOTAL de ${formatCurrency(group.totalAmount)} por ${group.member?.name}?`)) return;
+
+        try {
+            // Process all charges in parallel
+            await Promise.all(group.charges.map(async (charge: any) => {
+                // 1. Update status
+                const { error: chargeError } = await supabase
+                    .from('charges')
+                    .update({ status: 'paid' })
+                    .eq('id', charge.id)
+
+                if (chargeError) throw chargeError
+
+                // 2. Insert into payment_history
+                const { error: historyError } = await supabase
+                    .from('payment_history')
+                    .insert({
+                        charge_id: charge.id,
+                        amount_paid: charge.amount,
+                        payment_date: new Date().toISOString(),
+                        method: 'manual',
+                        notes: 'Pago grupal registrado desde Dashboard'
+                    })
+
+                if (historyError) throw historyError
+            }))
+
+            toast.success(`Pagos de ${group.member?.name} registrados`)
+            queryClient.invalidateQueries({ queryKey: ['charges'] })
+            queryClient.invalidateQueries({ queryKey: ['payment_history'] })
+
+        } catch (error: any) {
+            console.error('Error processing group payment:', error)
+            toast.error('Error al registrar algunos pagos')
+        }
+    }
+
+    const handleDeleteChargeGroup = async (group: any) => {
+        if (!confirm(`¿Eliminar TODOS los cobros pendientes de ${group.member?.name}?`)) return
+
+        const { error } = await supabase
             .from('charges')
-            .update({ status: 'paid' })
-            .eq('id', charge.id)
+            .delete()
+            .in('id', group.chargeIds)
 
-        if (chargeError) {
-            toast.error('Error al actualizar pago')
-            return
-        }
-
-        // 2. Insert into payment_history
-        const { error: historyError } = await supabase
-            .from('payment_history')
-            .insert({
-                charge_id: charge.id,
-                amount_paid: charge.amount,
-                payment_date: new Date().toISOString(),
-                method: 'manual', // Default for now
-                notes: 'Pago registrado desde Dashboard'
-            })
-
-        if (historyError) {
-            console.error('Error creating history:', historyError)
-            toast.warning('Pago registrado, pero falló el historial')
+        if (error) {
+            toast.error('Error al eliminar los cobros')
         } else {
-            toast.success('Pago registrado exitosamente')
+            toast.success('Cobros eliminados exitosamente')
+            queryClient.invalidateQueries({ queryKey: ['charges'] })
         }
-
-        queryClient.invalidateQueries({ queryKey: ['charges'] })
-        queryClient.invalidateQueries({ queryKey: ['payment_history'] })
     }
 
     // Calculate Total Monthly Cost
@@ -126,7 +171,7 @@ export const Dashboard = () => {
         if (!platforms || !members) return
         setIsGenerating(true)
         try {
-            const model = genAI.getGenerativeModel({ model: "gemini-pro" })
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
             const prompt = `
             Actúa como un asistente financiero para una app de suscripciones llamada Strimo.
             Datos actuales:
@@ -149,29 +194,30 @@ export const Dashboard = () => {
     }
 
     const generateReminder = async () => {
-        if (!pendingCharges || pendingCharges.length === 0) {
+        if (!groupedChargesList || groupedChargesList.length === 0) {
             toast.info('No hay cobros pendientes para generar recordatorios.')
             return
         }
 
         setIsGeneratingReminder(true)
         try {
-            const model = genAI.getGenerativeModel({ model: "gemini-pro" })
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
 
-            const debtSummary = pendingCharges.map((c: any) =>
-                `- ${c.members?.name} debe ${formatCurrency(c.amount)} por ${c.platforms?.name} (Vence: ${format(new Date(c.due_date), 'dd/MM')})`
+            // Use grouped list for cleaner summary
+            const debtSummary = groupedChargesList.map((g: any) =>
+                `- ${g.member?.name} debe un total de ${formatCurrency(g.totalAmount)} por: ${g.platforms.join(', ')} (Vence: ${format(new Date(g.dueDate), 'dd/MM')})`
             ).join('\n')
 
             const prompt = `
             Genera un mensaje amable pero firme para enviar por WhatsApp a los miembros del grupo de suscripciones "Strimo".
             
-            Lista de deudas pendientes:
+            Lista de deudas pendientes (RESUMIDA POR PERSONA):
             ${debtSummary}
             
             El mensaje debe:
             1. Saludar al grupo.
-            2. Listar lo que debe cada uno de forma clara.
-            3. Recordar pagar antes de la fecha límite para evitar cortes.
+            2. Listar lo que debe cada uno (total y conceptos) de forma clara y organizada.
+            3. Recordar pagar antes de la fecha límite.
             4. Incluir emojis relevantes.
             5. No uses introducciones como "Aquí tienes el mensaje", solo dame el texto listo para copiar.
         `
@@ -242,7 +288,7 @@ export const Dashboard = () => {
                         <div>
                             <p className="text-slate-400 text-sm">Estado de Pagos</p>
                             <h3 className="text-2xl font-bold text-white">
-                                {pendingCharges?.length ? `${pendingCharges.length} Pendientes` : 'Al día'}
+                                {pendingCharges?.length ? `${pendingCharges.length} Recibos` : 'Al día'}
                             </h3>
                         </div>
                     </div>
@@ -270,49 +316,68 @@ export const Dashboard = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                {/* Pending Charges List */}
+                {/* Pending Charges List (Grouped) */}
                 <div className="bg-[#1e293b]/50 border border-white/5 rounded-2xl p-6 backdrop-blur-md">
-                    <h2 className="text-lg font-bold text-white mb-4">Cobros Pendientes</h2>
-                    {pendingCharges && pendingCharges.length > 0 ? (
+                    <h2 className="text-lg font-bold text-white mb-4">Cobros Pendientes ({groupedChargesList.length})</h2>
+                    {groupedChargesList.length > 0 ? (
                         <div className="space-y-3">
-                            {pendingCharges.map((charge: any) => (
-                                <div key={charge.id} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
+                            {groupedChargesList.map((group: any) => (
+                                <div key={group.memberId} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
                                     <div className="flex items-center gap-4">
                                         <div className="p-2 bg-indigo-500/20 rounded-lg text-indigo-300 font-bold text-xs uppercase w-10 text-center">
-                                            {format(new Date(charge.due_date), 'dd')}
+                                            {format(new Date(group.dueDate), 'dd')}
                                         </div>
                                         <div>
-                                            <p className="text-white font-medium">{charge.members?.name}</p>
-                                            <p className="text-xs text-slate-400">{charge.platforms?.name}</p>
+                                            <p className="text-white font-medium">{group.member?.name}</p>
+                                            <p className="text-xs text-slate-400">
+                                                {group.platforms.join(', ')}
+                                            </p>
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <span className="text-white font-bold mr-2">{formatCurrency(charge.amount)}</span>
+                                        <span className="text-white font-bold mr-2">{formatCurrency(group.totalAmount)}</span>
 
                                         {/* Action Buttons */}
                                         <div className="flex gap-1">
-                                            {charge.members?.phone && (
+                                            {group.member?.phone && (
                                                 <a
-                                                    href={`https://wa.me/${charge.members.phone}?text=${encodeURIComponent(`Hola ${charge.members.name}, recuerda que tienes un pago pendiente de ${formatCurrency(charge.amount)} por ${charge.platforms?.name} en Strimo. ¡Gracias!`)}`}
+                                                    href={`https://wa.me/${group.member.phone}?text=${encodeURIComponent(
+                                                        `Hola ${group.member.name}, tienes pendientes en Strimo:\n` +
+                                                        group.charges.map((c: any) => `- ${c.platforms?.name}: ${formatCurrency(c.amount)}`).join('\n') +
+                                                        `\n*TOTAL: ${formatCurrency(group.totalAmount)}*\n\nPor favor realiza el pago lo antes posible. ¡Gracias!`
+                                                    )}`}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
                                                     className="p-2 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg transition-colors"
-                                                    title="Enviar recordatorio por WhatsApp"
+                                                    title="Enviar recordatorio total por WhatsApp"
                                                 >
                                                     <Send size={16} />
                                                 </a>
                                             )}
-                                            {charge.members?.email && (
+                                            {group.member?.email && (
                                                 <a
-                                                    href={`mailto:${charge.members.email}?subject=Recordatorio de Pago Strimo&body=${encodeURIComponent(`Hola ${charge.members.name},\n\nTe recordamos que tienes un pago pendiente de ${formatCurrency(charge.amount)} por tu suscripción a ${charge.platforms?.name}.\n\nPor favor realiza el pago lo antes posible.\n\nSaludos,\nTu admin de Strimo.`)}`}
+                                                    href={`mailto:${group.member.email}?subject=Recordatorio de Pago Strimo - ${format(new Date(), 'MMMM')}&body=${encodeURIComponent(
+                                                        `Hola ${group.member.name},\n\nTe recordamos el resumen de tus pagos pendientes:\n\n` +
+                                                        group.charges.map((c: any) => `- ${c.platforms?.name}: ${formatCurrency(c.amount)}`).join('\n') +
+                                                        `\n\nTOTAL A PAGAR: ${formatCurrency(group.totalAmount)}\n\nPor favor realiza el pago lo antes posible.\n\nSaludos,\nTu admin de Strimo.`
+                                                    )}`}
                                                     className="p-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg transition-colors"
-                                                    title="Enviar recordatorio por Correo"
+                                                    title="Enviar recordatorio total por Correo"
                                                 >
                                                     <Mail size={16} />
                                                 </a>
                                             )}
-                                            <Button size="sm" onClick={() => handleMarkAsPaid(charge)} title="Marcar como pagado">
+                                            <Button size="sm" onClick={() => handleMarkAsPaidGroup(group)} title="Marcar TODO como pagado (Grupo)">
                                                 <CheckCircle2 size={16} />
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="danger"
+                                                onClick={() => handleDeleteChargeGroup(group)}
+                                                title="Eliminar TODO el grupo"
+                                                className="bg-red-500/10 hover:bg-red-500/20 text-red-500"
+                                            >
+                                                <Trash2 size={16} />
                                             </Button>
                                         </div>
                                     </div>

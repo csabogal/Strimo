@@ -19,7 +19,7 @@ export const PlatformForm = ({ initialData, onSubmit, isLoading, onCancel }: Pla
         defaultValues: {
             name: initialData?.name || '',
             cost: initialData?.cost || 0,
-            billing_cycle: initialData?.billing_cycle || 'monthly',
+            billing_cycle: initialData?.billing_cycle || '1',
             payment_strategy: initialData?.payment_strategy || 'equal',
             icon_url: initialData?.icon_url || '',
             total_slots: initialData?.total_slots || 1,
@@ -49,14 +49,17 @@ export const PlatformForm = ({ initialData, onSubmit, isLoading, onCancel }: Pla
                 />
 
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-300">Ciclo de Facturación</label>
-                    <select
-                        className="flex h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                        {...register('billing_cycle')}
-                    >
-                        <option value="monthly">Mensual</option>
-                        <option value="yearly">Anual</option>
-                    </select>
+                    <label className="text-sm font-medium text-slate-300">Día de Corte (1-30)</label>
+                    <Input
+                        type="number"
+                        placeholder="Ej: 15"
+                        error={errors.billing_cycle?.message}
+                        {...register('billing_cycle', {
+                            required: 'Requerido',
+                            min: { value: 1, message: 'mín 1' },
+                            max: { value: 31, message: 'máx 31' }
+                        })}
+                    />
                 </div>
             </div>
 
