@@ -53,8 +53,15 @@ const MobileNavItem = ({ to, icon: Icon, label }: { to: string; icon: any; label
 export const Layout = () => {
     return (
         <div className="flex h-screen bg-[#0f172a] text-slate-100 overflow-hidden font-sans selection:bg-indigo-500/30">
+            {/* Background Effects */}
+            <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+                <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] mix-blend-overlay"></div>
+                <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-violet-600/15 rounded-full blur-[120px]"></div>
+                <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-indigo-600/15 rounded-full blur-[120px]"></div>
+            </div>
+
             {/* Sidebar */}
-            <aside className="w-64 flex-shrink-0 border-r border-white/5 bg-[#0f172a]/50 backdrop-blur-xl p-6 flex flex-col justify-between hidden md:flex">
+            <aside className="w-64 flex-shrink-0 border-r border-white/5 bg-[#0f172a]/50 backdrop-blur-xl p-6 flex flex-col justify-between hidden md:flex relative z-10">
                 <div>
                     <div className="flex items-center gap-3 px-2 mb-10">
                         <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-500/20">
@@ -72,7 +79,7 @@ export const Layout = () => {
                     </nav>
                 </div>
 
-                <button className="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-red-400 transition-colors rounded-xl hover:bg-red-500/5">
+                <button className="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-red-400 transition-colors rounded-xl hover:bg-red-500/5 cursor-pointer">
                     <LogOut size={20} />
                     <span className="font-medium">Cerrar Sesión</span>
                 </button>
@@ -87,16 +94,8 @@ export const Layout = () => {
                 </div>
             </nav>
 
-            {/* Background Effects - Fixed to stay while scrolling */}
-            <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-                <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-soft-light"></div>
-                <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-violet-600/20 rounded-full blur-[120px]"></div>
-                <div className="absolute bottom-[-20%] left-[-10%] w-[500px] h-[500px] bg-indigo-600/20 rounded-full blur-[120px]"></div>
-            </div>
-
             {/* Main Content */}
-            <main className="flex-1 overflow-y-auto overflow-x-hidden relative pb-20 md:pb-0">
-
+            <main className="flex-1 overflow-y-auto overflow-x-hidden relative pb-20 md:pb-0 z-10">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}

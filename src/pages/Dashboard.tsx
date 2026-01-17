@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Wallet, AlertCircle, CheckCircle2, Sparkles, Send, Mail, Trash2, ArrowUpRight } from 'lucide-react'
+import { Wallet, AlertCircle, CheckCircle2, Sparkles, Mail, Trash2, Send } from 'lucide-react'
 import Groq from 'groq-sdk'
 import { supabase } from '../lib/supabase'
 import { Button } from '../components/ui/Button'
@@ -8,7 +8,6 @@ import { generateMonthlyCharges } from '../lib/billing'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { generateEmailHTML } from '../lib/emailTemplate'
 import { generateWhatsAppMessage } from '../lib/whatsappTemplate'
 
 export const Dashboard = () => {
