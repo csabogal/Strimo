@@ -24,6 +24,32 @@ const SidebarItem = ({ to, icon: Icon, label }: { to: string; icon: any; label: 
     )
 }
 
+const MobileNavItem = ({ to, icon: Icon, label }: { to: string; icon: any; label: string }) => {
+    const location = useLocation()
+    const isActive = location.pathname === to
+
+    return (
+        <Link to={to} className="flex flex-col items-center gap-1 py-2 px-3 min-w-[64px]">
+            <div
+                className={clsx(
+                    'p-2 rounded-xl transition-all duration-200',
+                    isActive
+                        ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/30'
+                        : 'text-slate-400'
+                )}
+            >
+                <Icon size={20} />
+            </div>
+            <span className={clsx(
+                'text-xs font-medium transition-colors',
+                isActive ? 'text-white' : 'text-slate-500'
+            )}>
+                {label}
+            </span>
+        </Link>
+    )
+}
+
 export const Layout = () => {
     return (
         <div className="flex h-screen bg-[#0f172a] text-slate-100 overflow-hidden font-sans selection:bg-indigo-500/30">
@@ -52,22 +78,30 @@ export const Layout = () => {
                 </button>
             </aside>
 
-            {/* Mobile Navbar Placeholder (Hidden on Desktop) */}
-            {/* <div className="md:hidden fixed bottom-0 w-full bg-[#0f172a]/80 backdrop-blur-md border-t border-white/5 z-50 p-4 flex justify-around">
-           Mobile Nav Items 
-      </div> */}
+            {/* Mobile Bottom Navigation */}
+            <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0f172a]/95 backdrop-blur-xl border-t border-white/10 z-50 pb-safe">
+                <div className="flex justify-around items-center">
+                    <MobileNavItem to="/" icon={LayoutDashboard} label="Inicio" />
+                    <MobileNavItem to="/members" icon={Users} label="Miembros" />
+                    <MobileNavItem to="/platforms" icon={MonitorPlay} label="Plataformas" />
+                </div>
+            </nav>
+
+            {/* Background Effects - Fixed to stay while scrolling */}
+            <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+                <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-soft-light"></div>
+                <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-violet-600/20 rounded-full blur-[120px]"></div>
+                <div className="absolute bottom-[-20%] left-[-10%] w-[500px] h-[500px] bg-indigo-600/20 rounded-full blur-[120px]"></div>
+            </div>
 
             {/* Main Content */}
-            <main className="flex-1 overflow-y-auto relative">
-                <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none mix-blend-soft-light"></div>
-                <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-violet-600/20 rounded-full blur-[120px] pointer-events-none"></div>
-                <div className="absolute bottom-[-20%] left-[-10%] w-[500px] h-[500px] bg-indigo-600/20 rounded-full blur-[120px] pointer-events-none"></div>
+            <main className="flex-1 overflow-y-auto overflow-x-hidden relative pb-20 md:pb-0">
 
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, ease: 'easeOut' }}
-                    className="relative z-10 p-8 max-w-7xl mx-auto"
+                    className="relative z-10 p-4 sm:p-6 md:p-8 max-w-7xl mx-auto"
                 >
                     <Outlet />
                 </motion.div>

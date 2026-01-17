@@ -184,7 +184,7 @@ export const PlatformMembersModal = ({ platform, onClose }: PlatformMembersModal
                         {selectedMembers.length} / {platform.total_slots} Ocupados
                     </span>
                 </h4>
-                <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-2 mb-4">
+                <div className="grid grid-cols-1 gap-2 max-h-[40vh] sm:max-h-60 overflow-y-auto pr-2 mb-4">
                     {allMembers?.map(member => {
                         const isSelected = selectedMembers.includes(member.id)
                         return (
@@ -219,13 +219,13 @@ export const PlatformMembersModal = ({ platform, onClose }: PlatformMembersModal
                             Orden de Turnos (Rotación)
                             <span className="text-xs text-slate-500 font-normal ml-auto">Usa las flechas para reordenar</span>
                         </h4>
-                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                        <div className="space-y-2 max-h-[30vh] sm:max-h-48 overflow-y-auto">
                             {rotationMembers.map((rm, idx) => {
                                 const member = allMembers?.find(m => m.id === rm.member_id)
                                 if (!member) return null
                                 return (
-                                    <div key={rm.member_id} className="flex items-center justify-between p-2 bg-white/5 rounded-lg border border-white/5">
-                                        <div className="flex items-center gap-3">
+                                    <div key={rm.member_id} className="flex items-center justify-between p-2 sm:p-3 bg-white/5 rounded-lg border border-white/5">
+                                        <div className="flex items-center gap-2 sm:gap-3">
                                             <span className="w-6 h-6 flex items-center justify-center bg-slate-700 rounded-full text-xs font-bold text-white">
                                                 {idx + 1}
                                             </span>
@@ -235,16 +235,16 @@ export const PlatformMembersModal = ({ platform, onClose }: PlatformMembersModal
                                             <button
                                                 onClick={() => moveOrder(idx, 'up')}
                                                 disabled={idx === 0}
-                                                className="p-1 hover:bg-white/10 rounded disabled:opacity-30 text-slate-400 disabled:cursor-not-allowed"
+                                                className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-white/10 rounded-lg disabled:opacity-30 text-slate-400 disabled:cursor-not-allowed active:bg-white/20"
                                             >
-                                                <ArrowUp size={14} />
+                                                <ArrowUp size={18} />
                                             </button>
                                             <button
                                                 onClick={() => moveOrder(idx, 'down')}
                                                 disabled={idx === rotationMembers.length - 1}
-                                                className="p-1 hover:bg-white/10 rounded disabled:opacity-30 text-slate-400 disabled:cursor-not-allowed"
+                                                className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-white/10 rounded-lg disabled:opacity-30 text-slate-400 disabled:cursor-not-allowed active:bg-white/20"
                                             >
-                                                <ArrowDown size={14} />
+                                                <ArrowDown size={18} />
                                             </button>
                                         </div>
                                     </div>
@@ -255,9 +255,9 @@ export const PlatformMembersModal = ({ platform, onClose }: PlatformMembersModal
                 )}
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-white/5">
-                <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-                <Button onClick={handleSave} isLoading={updateSubsMutation.isPending || reorderMutation.isPending}>Guardar Cambios</Button>
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-4 border-t border-white/5">
+                <Button variant="ghost" onClick={onClose} className="w-full sm:w-auto">Cancelar</Button>
+                <Button onClick={handleSave} isLoading={updateSubsMutation.isPending || reorderMutation.isPending} className="w-full sm:w-auto">Guardar Cambios</Button>
             </div>
         </div>
     )

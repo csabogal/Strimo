@@ -115,14 +115,14 @@ export const Platforms = () => {
 
     return (
         <div>
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 sm:mb-8">
                 <div>
-                    <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
+                    <h1 className="text-2xl sm:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
                         Plataformas
                     </h1>
-                    <p className="text-slate-400 mt-1">Netflix, Spotify, HBO, etc.</p>
+                    <p className="text-slate-400 mt-1 text-sm sm:text-base">Netflix, Spotify, HBO, etc.</p>
                 </div>
-                <Button onClick={() => setIsModalOpen(true)}>
+                <Button onClick={() => setIsModalOpen(true)} className="w-full sm:w-auto">
                     <Plus size={20} className="mr-2" />
                     Nueva Plataforma
                 </Button>
@@ -131,31 +131,47 @@ export const Platforms = () => {
             {isLoading ? (
                 <div className="text-center py-20 text-slate-500">Cargando plataformas...</div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                     {platforms?.map((platform) => (
                         // Card
                         <div
                             key={platform.id}
-                            className="group relative bg-[#1e293b]/50 backdrop-blur-md border border-white/5 rounded-2xl p-6 hover:shadow-xl hover:shadow-violet-500/10 transition-all duration-300 hover:-translate-y-1"
+                            className="group relative bg-[#1e293b]/50 backdrop-blur-md border border-white/5 rounded-2xl p-4 sm:p-6 hover:shadow-xl hover:shadow-violet-500/10 transition-all duration-300 sm:hover:-translate-y-1"
                         >
                             <div className="flex justify-between items-start mb-4">
-                                <div className="flex gap-3 items-center">
-                                    <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center p-2">
+                                <div className="flex gap-3 items-center flex-1 min-w-0">
+                                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center p-2 flex-shrink-0">
                                         {platform.icon_url ? (
                                             <img src={platform.icon_url} alt={platform.name} className="w-full h-full object-contain" />
                                         ) : (
-                                            <MonitorPlay className="text-slate-400" />
+                                            <MonitorPlay className="text-slate-400" size={20} />
                                         )}
                                     </div>
-                                    <div>
-                                        <h3 className="font-bold text-white text-lg">{platform.name}</h3>
-                                        <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
+                                    <div className="min-w-0 flex-1">
+                                        <h3 className="font-bold text-white text-base sm:text-lg truncate">{platform.name}</h3>
+                                        <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 bg-white/5 px-2 py-0.5 rounded-full border border-white/5 inline-block">
                                             {platform.billing_cycle === 'monthly' ? 'Mensual' :
                                                 platform.billing_cycle === 'yearly' ? 'Anual' :
                                                     !isNaN(Number(platform.billing_cycle)) ? `Día ${platform.billing_cycle}` :
                                                         platform.billing_cycle}
                                         </span>
                                     </div>
+                                </div>
+
+                                {/* Action buttons - always visible on mobile, hover on desktop */}
+                                <div className="flex gap-2 ml-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                    <button
+                                        onClick={() => handleEdit(platform)}
+                                        className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center bg-white/10 rounded-lg hover:bg-indigo-500 hover:text-white transition-colors text-slate-400 active:bg-indigo-600"
+                                    >
+                                        <Pencil size={18} />
+                                    </button>
+                                    <button
+                                        onClick={() => handleDelete(platform.id)}
+                                        className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center bg-white/10 rounded-lg hover:bg-red-500 hover:text-white transition-colors text-slate-400 active:bg-red-600"
+                                    >
+                                        <Trash2 size={18} />
+                                    </button>
                                 </div>
                             </div>
 
@@ -165,11 +181,11 @@ export const Platforms = () => {
                                         <Wallet size={16} />
                                         <span>Costo</span>
                                     </div>
-                                    <span className="font-semibold text-white">{formatCurrency(platform.cost)}</span>
+                                    <span className="font-semibold text-white text-sm sm:text-base">{formatCurrency(platform.cost)}</span>
                                 </div>
 
                                 <div
-                                    className="flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/5 cursor-pointer hover:bg-white/10 transition-colors"
+                                    className="flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/5 cursor-pointer hover:bg-white/10 transition-colors active:bg-white/15"
                                     onClick={() => handleManageMembers(platform)}
                                 >
                                     <div className="flex items-center gap-2 text-slate-400 text-sm">
@@ -194,21 +210,6 @@ export const Platforms = () => {
                                         </>
                                     )}
                                 </div>
-                            </div>
-
-                            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-                                <button
-                                    onClick={() => handleEdit(platform)}
-                                    className="p-2 bg-white/10 rounded-lg hover:bg-indigo-500 hover:text-white transition-colors text-slate-400"
-                                >
-                                    <Pencil size={16} />
-                                </button>
-                                <button
-                                    onClick={() => handleDelete(platform.id)}
-                                    className="p-2 bg-white/10 rounded-lg hover:bg-red-500 hover:text-white transition-colors text-slate-400"
-                                >
-                                    <Trash2 size={16} />
-                                </button>
                             </div>
                         </div>
                     ))}

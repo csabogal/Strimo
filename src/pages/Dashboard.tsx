@@ -237,19 +237,19 @@ El mensaje debe:
 
     return (
         <div>
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 sm:mb-8">
                 <div>
-                    <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
+                    <h1 className="text-2xl sm:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
                         Dashboard
                     </h1>
-                    <p className="text-slate-400 mt-1">Resumen general de tus suscripciones.</p>
+                    <p className="text-slate-400 mt-1 text-sm sm:text-base">Resumen general de tus suscripciones.</p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                     <Button
                         onClick={handleGenerateCharges}
                         isLoading={isGeneratingCharges}
                         variant="ghost"
-                        className="text-indigo-300 hover:bg-indigo-500/10"
+                        className="text-indigo-300 hover:bg-indigo-500/10 w-full sm:w-auto"
                     >
                         Generar Cobros
                     </Button>
@@ -257,7 +257,7 @@ El mensaje debe:
                         onClick={generateReminder}
                         isLoading={isGeneratingReminder}
                         variant="primary"
-                        className="bg-emerald-600 hover:bg-emerald-500 text-white"
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white w-full sm:w-auto"
                     >
                         <Sparkles size={18} className="mr-2" />
                         IA Cobranza
@@ -322,59 +322,69 @@ El mensaje debe:
                     {groupedChargesList.length > 0 ? (
                         <div className="space-y-3">
                             {groupedChargesList.map((group: any) => (
-                                <div key={group.memberId} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
-                                    <div className="flex items-center gap-4">
-                                        <div className="p-2 bg-indigo-500/20 rounded-lg text-indigo-300 font-bold text-xs uppercase w-10 text-center">
-                                            {format(new Date(group.dueDate), 'dd')}
+                                <div key={group.memberId} className="p-3 sm:p-4 bg-white/5 rounded-xl border border-white/5">
+                                    <div className="flex items-start sm:items-center justify-between gap-3 mb-3 sm:mb-0">
+                                        <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+                                            <div className="p-2 bg-indigo-500/20 rounded-lg text-indigo-300 font-bold text-xs uppercase w-10 text-center flex-shrink-0">
+                                                {format(new Date(group.dueDate), 'dd')}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-white font-medium truncate">{group.member?.name}</p>
+                                                <p className="text-xs text-slate-400 truncate">
+                                                    {group.platforms.join(', ')}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className="text-white font-medium">{group.member?.name}</p>
-                                            <p className="text-xs text-slate-400">
-                                                {group.platforms.join(', ')}
-                                            </p>
-                                        </div>
+                                        <span className="text-white font-bold text-sm sm:text-base whitespace-nowrap">{formatCurrency(group.totalAmount)}</span>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-white font-bold mr-2">{formatCurrency(group.totalAmount)}</span>
-                                        <div className="flex gap-1">
-                                            {group.member?.phone && (
-                                                <button
-                                                    onClick={() => {
-                                                        const message = generateWhatsAppMessage({
-                                                            memberName: group.member.name,
-                                                            charges: group.charges.map((c: any) => ({
-                                                                platformName: c.platforms?.name || 'Plataforma',
-                                                                amount: c.amount
-                                                            })),
-                                                            totalAmount: group.totalAmount,
-                                                            dueDate: format(new Date(group.dueDate), 'dd/MM/yyyy')
-                                                        });
-                                                        const phone = group.member.phone.replace(/\D/g, '');
-                                                        window.open(`https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`, '_blank');
-                                                    }}
-                                                    className="p-2 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg transition-colors cursor-pointer"
-                                                    title="WhatsApp Premium"
-                                                >
-                                                    <Send size={16} />
-                                                </button>
-                                            )}
-                                            {group.member?.email && (
-                                                <button
-                                                    onClick={() => handleSendPremiumManualEmail(group.chargeIds[0])}
-                                                    disabled={sendingEmailFor === group.chargeIds[0]}
-                                                    className="p-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
-                                                    title="Enviar Correo Premium (Directo)"
-                                                >
-                                                    <Mail size={16} className={sendingEmailFor === group.chargeIds[0] ? 'animate-pulse' : ''} />
-                                                </button>
-                                            )}
-                                            <Button size="sm" onClick={() => handleMarkAsPaidGroup(group)}>
-                                                <CheckCircle2 size={16} />
-                                            </Button>
-                                            <Button size="sm" variant="danger" onClick={() => handleDeleteChargeGroup(group)} className="bg-red-500/10 text-red-500">
-                                                <Trash2 size={16} />
-                                            </Button>
-                                        </div>
+                                    <div className="flex flex-wrap gap-2 sm:justify-end pt-3 sm:pt-0 border-t sm:border-t-0 border-white/5 sm:mt-0 mt-3">
+                                        {group.member?.phone && (
+                                            <button
+                                                onClick={() => {
+                                                    const message = generateWhatsAppMessage({
+                                                        memberName: group.member.name,
+                                                        charges: group.charges.map((c: any) => ({
+                                                            platformName: c.platforms?.name || 'Plataforma',
+                                                            amount: c.amount
+                                                        })),
+                                                        totalAmount: group.totalAmount,
+                                                        dueDate: format(new Date(group.dueDate), 'dd/MM/yyyy')
+                                                    });
+                                                    const phone = group.member.phone.replace(/\D/g, '');
+                                                    window.open(`https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`, '_blank');
+                                                }}
+                                                className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg transition-colors cursor-pointer active:bg-green-500/30"
+                                                title="WhatsApp Premium"
+                                            >
+                                                <Send size={18} />
+                                            </button>
+                                        )}
+                                        {group.member?.email && (
+                                            <button
+                                                onClick={() => handleSendPremiumManualEmail(group.chargeIds[0])}
+                                                disabled={sendingEmailFor === group.chargeIds[0]}
+                                                className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg transition-colors disabled:opacity-50 cursor-pointer active:bg-blue-500/30"
+                                                title="Enviar Correo Premium (Directo)"
+                                            >
+                                                <Mail size={18} className={sendingEmailFor === group.chargeIds[0] ? 'animate-pulse' : ''} />
+                                            </button>
+                                        )}
+                                        <Button
+                                            size="sm"
+                                            onClick={() => handleMarkAsPaidGroup(group)}
+                                            title="Marcar como pagado"
+                                        >
+                                            <CheckCircle2 size={18} />
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="danger"
+                                            onClick={() => handleDeleteChargeGroup(group)}
+                                            className="bg-red-500/10 text-red-500"
+                                            title="Eliminar cobro"
+                                        >
+                                            <Trash2 size={18} />
+                                        </Button>
                                     </div>
                                 </div>
                             ))}

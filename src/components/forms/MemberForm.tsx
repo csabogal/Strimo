@@ -57,18 +57,20 @@ export const MemberForm = ({ initialData, onSubmit, isLoading, onCancel }: Membe
                 {...register('avatar_url')}
             />
 
-            <div className="flex justify-end gap-3 mt-6">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 mt-6">
                 <Button
                     type="button"
                     variant="ghost"
                     onClick={onCancel}
                     disabled={isLoading}
+                    className="w-full sm:w-auto"
                 >
                     Cancelar
                 </Button>
                 <Button
                     type="submit"
                     isLoading={isLoading}
+                    className="w-full sm:w-auto"
                 >
                     {initialData ? 'Actualizar' : 'Crear Miembro'}
                 </Button>

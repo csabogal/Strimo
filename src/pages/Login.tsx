@@ -42,17 +42,17 @@ export const Login = () => {
     }
 
     return (
-        <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4">
-            {/* Background Effects */}
+        <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4 sm:p-6">
+            {/* Background Effects - simplified on mobile */}
             <div className="fixed inset-0 pointer-events-none overflow-hidden">
-                <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-500/20 blur-[100px]" />
-                <div className="absolute top-[40%] -right-[10%] w-[40%] h-[40%] rounded-full bg-violet-500/20 blur-[100px]" />
+                <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-500/20 blur-[100px] sm:blur-[100px]" />
+                <div className="absolute top-[40%] -right-[10%] w-[40%] h-[40%] rounded-full bg-violet-500/20 blur-[100px] sm:blur-[100px]" />
             </div>
 
             <div className="w-full max-w-md relative z-10">
-                <div className="bg-[#1e293b]/50 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl">
-                    <div className="text-center mb-8">
-                        <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-violet-400">
+                <div className="bg-[#1e293b]/50 backdrop-blur-xl border border-white/10 p-6 sm:p-8 rounded-2xl sm:rounded-3xl shadow-2xl">
+                    <div className="text-center mb-6 sm:mb-8">
+                        <h1 className="text-2xl sm:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-violet-400">
                             Strimo
                         </h1>
                         <p className="text-slate-400 mt-2 text-sm">
@@ -100,7 +100,7 @@ export const Login = () => {
                     <div className="mt-6 text-center">
                         <button
                             onClick={() => setIsSignUp(!isSignUp)}
-                            className="text-sm text-slate-400 hover:text-white transition-colors"
+                            className="text-sm text-slate-400 hover:text-white transition-colors py-2 px-4 min-h-[44px] active:text-indigo-400"
                         >
                             {isSignUp
                                 ? '¿Ya tienes cuenta? Inicia sesión'

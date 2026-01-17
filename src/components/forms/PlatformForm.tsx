@@ -39,7 +39,7 @@ export const PlatformForm = ({ initialData, onSubmit, isLoading, onCancel }: Pla
                 {...register('name', { required: 'El nombre es obligatorio' })}
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input
                     label="Costo Mensual"
                     type="number"
@@ -49,7 +49,7 @@ export const PlatformForm = ({ initialData, onSubmit, isLoading, onCancel }: Pla
                 />
 
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-300">Día de Corte (1-30)</label>
+                    <label className="text-sm font-medium text-slate-300">Día de Corte (1-31)</label>
                     <Input
                         type="number"
                         placeholder="Ej: 15"
@@ -63,7 +63,7 @@ export const PlatformForm = ({ initialData, onSubmit, isLoading, onCancel }: Pla
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-300">Estrategia de Pago</label>
                     <select
@@ -91,18 +91,20 @@ export const PlatformForm = ({ initialData, onSubmit, isLoading, onCancel }: Pla
                 {...register('icon_url')}
             />
 
-            <div className="flex justify-end gap-3 mt-6">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 mt-6">
                 <Button
                     type="button"
                     variant="ghost"
                     onClick={onCancel}
                     disabled={isLoading}
+                    className="w-full sm:w-auto"
                 >
                     Cancelar
                 </Button>
                 <Button
                     type="submit"
                     isLoading={isLoading}
+                    className="w-full sm:w-auto"
                 >
                     {initialData ? 'Actualizar' : 'Crear Plataforma'}
                 </Button>
