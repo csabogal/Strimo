@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Wallet, AlertCircle, CheckCircle2, Sparkles, Send, Mail, Trash2 } from 'lucide-react'
+import { Wallet, AlertCircle, CheckCircle2, Sparkles, Send, Mail, Trash2, ArrowUpRight } from 'lucide-react'
 import Groq from 'groq-sdk'
 import { supabase } from '../lib/supabase'
 import { Button } from '../components/ui/Button'
@@ -8,30 +8,20 @@ import { generateMonthlyCharges } from '../lib/billing'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-
-// ... imports
+import { generateEmailHTML } from '../lib/emailTemplate'
+import { generateWhatsAppMessage } from '../lib/whatsappTemplate'
 
 export const Dashboard = () => {
     const [aiInsight, setAiInsight] = useState<string>('')
-    const [isGenerating, setIsGenerating] = useState(false)
     const queryClient = useQueryClient()
     const [isGeneratingReminder, setIsGeneratingReminder] = useState(false)
     const [isGeneratingCharges, setIsGeneratingCharges] = useState(false)
 
-    // Fetch Platforms (and their costs)
+    // Fetch Platforms
     const { data: platforms } = useQuery({
         queryKey: ['platforms'],
         queryFn: async () => {
             const { data } = await supabase.from('platforms').select('*')
-            return data || []
-        }
-    })
-
-    // Fetch Members
-    const { data: members } = useQuery({
-        queryKey: ['members'],
-        queryFn: async () => {
-            const { data } = await supabase.from('members').select('*')
             return data || []
         }
     })
@@ -91,14 +81,13 @@ export const Dashboard = () => {
                 platforms: [],
                 chargeIds: [],
                 dueDate: charge.due_date,
-                charges: [] // Keep original charges for individual processing if needed
+                charges: []
             }
         }
         acc[memberId].totalAmount += charge.amount
         acc[memberId].platforms.push(charge.platforms?.name)
         acc[memberId].chargeIds.push(charge.id)
         acc[memberId].charges.push(charge)
-        // Keep the earliest due date
         if (new Date(charge.due_date) < new Date(acc[memberId].dueDate)) {
             acc[memberId].dueDate = charge.due_date
         }
@@ -111,9 +100,7 @@ export const Dashboard = () => {
         if (!confirm(`¿Confirmar pago TOTAL de ${formatCurrency(group.totalAmount)} por ${group.member?.name}?`)) return;
 
         try {
-            // Process all charges in parallel
             await Promise.all(group.charges.map(async (charge: any) => {
-                // 1. Update status
                 const { error: chargeError } = await supabase
                     .from('charges')
                     .update({ status: 'paid' })
@@ -121,7 +108,6 @@ export const Dashboard = () => {
 
                 if (chargeError) throw chargeError
 
-                // 2. Insert into payment_history
                 const { error: historyError } = await supabase
                     .from('payment_history')
                     .insert({
@@ -161,51 +147,35 @@ export const Dashboard = () => {
         }
     }
 
-    // Calculate Total Monthly Cost
-    const totalCost = platforms?.reduce((acc: any, p: any) => acc + Number(p.cost), 0) || 0
+    const [sendingEmailFor, setSendingEmailFor] = useState<string | null>(null)
 
-    // Calculate next due date from pending charges
-    const nextDue = pendingCharges?.[0]
-
-    const generateInsights = async () => {
-        if (!platforms || !members) return
-
-        const apiKey = import.meta.env.VITE_GROQ_API_KEY
-        if (!apiKey) {
-            toast.error('Falta API Key de Groq')
-            return
-        }
-
-        setIsGenerating(true)
+    const handleSendPremiumManualEmail = async (chargeId: string) => {
+        setSendingEmailFor(chargeId)
         try {
-            const groq = new Groq({ apiKey, dangerouslyAllowBrowser: true })
-            const prompt = `Actúa como un asistente financiero para una app de suscripciones llamada Strimo.
-Datos actuales:
-- Total mensual en suscripciones: ${formatCurrency(totalCost)}
-- Plataformas activas: ${platforms.map((p: any) => p.name).join(', ')}
-- Número de miembros: ${members.length}
-
-Analiza estos gastos y dame 3 consejos breves o "insights" para optimizar o gestionar mejor estos pagos.
-Sé conciso, amigable y usa un tono premium/profesional. Formato lista.`
-
-            const completion = await groq.chat.completions.create({
-                messages: [{ role: 'user', content: prompt }],
-                model: 'llama-3.3-70b-versatile',
-                temperature: 0.7,
-                max_tokens: 500
+            const { data, error } = await supabase.functions.invoke('process-reminders', {
+                body: { charge_id: chargeId }
             })
 
-            setAiInsight(completion.choices[0]?.message?.content || 'No se pudo generar respuesta.')
-        } catch (error: any) {
-            console.error("Error Groq:", error)
-            let msg = "No pude generar insights."
-            if (error.message?.includes('429')) msg = "Límite de uso de IA excedido. Intenta en 1 min."
-            setAiInsight(msg)
-            if (error.message?.includes('429')) toast.warning("Cuota gratuita agotada temporalmente.")
+            if (error) throw error
+
+            if (data?.processed > 0) {
+                toast.success('Correo Premium enviado exitosamente')
+                queryClient.invalidateQueries({ queryKey: ['charges'] })
+            } else {
+                toast.error('No se pudo enviar el correo')
+            }
+        } catch (error) {
+            console.error('Error sending premium email:', error)
+            toast.error('Error al conectar con el servicio de correo')
         } finally {
-            setIsGenerating(false)
+            setSendingEmailFor(null)
         }
     }
+
+
+
+    const totalCost = platforms?.reduce((acc: any, p: any) => acc + Number(p.cost), 0) || 0
+    const nextDue = pendingCharges?.[0]
 
     const generateReminder = async () => {
         const apiKey = import.meta.env.VITE_GROQ_API_KEY
@@ -223,7 +193,6 @@ Sé conciso, amigable y usa un tono premium/profesional. Formato lista.`
         try {
             const groq = new Groq({ apiKey, dangerouslyAllowBrowser: true })
 
-            // Use grouped list for cleaner summary and filter out potential undefined values
             const debtSummary = groupedChargesList.map((g: any) => {
                 const platformsList = g.platforms.filter((p: any) => p).join(', ') || 'Suscripción'
                 const dateStr = g.dueDate ? format(new Date(g.dueDate), 'dd/MM') : 'Pendiente'
@@ -269,7 +238,6 @@ El mensaje debe:
     return (
         <div>
             <div className="flex items-center justify-between mb-8">
-                {/* ... Header ... */}
                 <div>
                     <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
                         Dashboard
@@ -297,7 +265,6 @@ El mensaje debe:
                 </div>
             </div>
 
-            {/* ... Cards Section (Unchanged) ... */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <div className="bg-gradient-to-br from-indigo-600/20 to-violet-600/20 border border-indigo-500/20 rounded-2xl p-6 backdrop-blur-md">
                     <div className="flex items-center gap-4 mb-4">
@@ -350,7 +317,6 @@ El mensaje debe:
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                {/* Pending Charges List (Grouped) */}
                 <div className="bg-[#1e293b]/50 border border-white/5 rounded-2xl p-6 backdrop-blur-md">
                     <h2 className="text-lg font-bold text-white mb-4">Cobros Pendientes ({groupedChargesList.length})</h2>
                     {groupedChargesList.length > 0 ? (
@@ -370,47 +336,42 @@ El mensaje debe:
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <span className="text-white font-bold mr-2">{formatCurrency(group.totalAmount)}</span>
-
-                                        {/* Action Buttons */}
                                         <div className="flex gap-1">
                                             {group.member?.phone && (
-                                                <a
-                                                    href={`https://wa.me/${group.member.phone}?text=${encodeURIComponent(
-                                                        `Hola ${group.member.name}, tienes pendientes en Strimo:\n` +
-                                                        group.charges.map((c: any) => `- ${c.platforms?.name}: ${formatCurrency(c.amount)}`).join('\n') +
-                                                        `\n*TOTAL: ${formatCurrency(group.totalAmount)}*\n\nPor favor realiza el pago lo antes posible. ¡Gracias!`
-                                                    )}`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="p-2 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg transition-colors"
-                                                    title="Enviar recordatorio total por WhatsApp"
+                                                <button
+                                                    onClick={() => {
+                                                        const message = generateWhatsAppMessage({
+                                                            memberName: group.member.name,
+                                                            charges: group.charges.map((c: any) => ({
+                                                                platformName: c.platforms?.name || 'Plataforma',
+                                                                amount: c.amount
+                                                            })),
+                                                            totalAmount: group.totalAmount,
+                                                            dueDate: format(new Date(group.dueDate), 'dd/MM/yyyy')
+                                                        });
+                                                        const phone = group.member.phone.replace(/\D/g, '');
+                                                        window.open(`https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`, '_blank');
+                                                    }}
+                                                    className="p-2 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg transition-colors cursor-pointer"
+                                                    title="WhatsApp Premium"
                                                 >
                                                     <Send size={16} />
-                                                </a>
+                                                </button>
                                             )}
                                             {group.member?.email && (
-                                                <a
-                                                    href={`mailto:${group.member.email}?subject=Recordatorio de Pago Strimo - ${format(new Date(), 'MMMM')}&body=${encodeURIComponent(
-                                                        `Hola ${group.member.name},\n\nTe recordamos el resumen de tus pagos pendientes:\n\n` +
-                                                        group.charges.map((c: any) => `- ${c.platforms?.name}: ${formatCurrency(c.amount)}`).join('\n') +
-                                                        `\n\nTOTAL A PAGAR: ${formatCurrency(group.totalAmount)}\n\nPor favor realiza el pago lo antes posible.\n\nSaludos,\nTu admin de Strimo.`
-                                                    )}`}
-                                                    className="p-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg transition-colors"
-                                                    title="Enviar recordatorio total por Correo"
+                                                <button
+                                                    onClick={() => handleSendPremiumManualEmail(group.chargeIds[0])}
+                                                    disabled={sendingEmailFor === group.chargeIds[0]}
+                                                    className="p-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                                                    title="Enviar Correo Premium (Directo)"
                                                 >
-                                                    <Mail size={16} />
-                                                </a>
+                                                    <Mail size={16} className={sendingEmailFor === group.chargeIds[0] ? 'animate-pulse' : ''} />
+                                                </button>
                                             )}
-                                            <Button size="sm" onClick={() => handleMarkAsPaidGroup(group)} title="Marcar TODO como pagado (Grupo)">
+                                            <Button size="sm" onClick={() => handleMarkAsPaidGroup(group)}>
                                                 <CheckCircle2 size={16} />
                                             </Button>
-                                            <Button
-                                                size="sm"
-                                                variant="danger"
-                                                onClick={() => handleDeleteChargeGroup(group)}
-                                                title="Eliminar TODO el grupo"
-                                                className="bg-red-500/10 hover:bg-red-500/20 text-red-500"
-                                            >
+                                            <Button size="sm" variant="danger" onClick={() => handleDeleteChargeGroup(group)} className="bg-red-500/10 text-red-500">
                                                 <Trash2 size={16} />
                                             </Button>
                                         </div>
@@ -423,64 +384,78 @@ El mensaje debe:
                     )}
                 </div>
 
-                {/* AI Section (Reused for both Insights and Reminders) */}
-                <div className="bg-gradient-to-b from-slate-800/40 to-[#1e293b]/40 border border-white/5 rounded-2xl p-6 backdrop-blur-md relative overflow-hidden flex flex-col">
-                    <div className="flex items-center justify-between mb-6 relative z-10">
-                        <div className="flex items-center gap-3">
-                            <Sparkles className="text-fuchsia-400" />
-                            <h2 className="text-xl font-bold text-white">Strimo AI</h2>
-                        </div>
-                        <div className="flex gap-2">
-                            {aiInsight && aiInsight.includes("debe") && (
-                                <a
-                                    href={`https://wa.me/?text=${encodeURIComponent(aiInsight)}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center justify-center h-9 px-3 text-sm font-medium bg-green-600/20 text-green-400 hover:bg-green-600/30 border border-green-500/30 rounded-xl transition-all"
-                                >
-                                    <Send size={16} className="mr-2" />
-                                    Enviar al Grupo
-                                </a>
-                            )}
-                            <Button
-                                onClick={generateInsights}
-                                isLoading={isGenerating}
-                                variant="secondary"
-                                size="sm"
-                            >
-                                Ver Insights
-                            </Button>
-                        </div>
+                <div className="bg-gradient-to-b from-slate-800/40 to-[#1e293b]/40 border border-white/5 rounded-2xl p-6 backdrop-blur-md flex flex-col">
+                    <div className="flex items-center gap-3 mb-6">
+                        <Sparkles className="text-fuchsia-400" />
+                        <h2 className="text-xl font-bold text-white">Automatización</h2>
                     </div>
 
-                    {aiInsight ? (
-                        <div className="bg-black/20 rounded-xl p-4 text-slate-300 leading-relaxed whitespace-pre-line border border-white/5 flex-1 text-sm overflow-y-auto max-h-[300px]">
-                            {aiInsight}
+                    <div className="space-y-4">
+                        <div className="p-4 bg-white/5 rounded-xl border border-white/5">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm font-medium text-slate-300">Correos Inteligentes</span>
+                                <span className="text-xs px-2 py-1 bg-green-500/20 text-green-400 rounded-full">Activo</span>
+                            </div>
+                            <p className="text-xs text-slate-400">
+                                La IA envía correos personalizados automáticamente en T-5 días, T-0 y T+5 días.
+                            </p>
                         </div>
-                    ) : (
-                        <div className="flex-1 flex items-center justify-center text-slate-500 text-center text-sm">
-                            Usa "IA Cobranza" o "Ver Insights" para obtener ayuda de la IA.
+
+                        <div className="p-4 bg-white/5 rounded-xl border border-white/5">
+                            <span className="text-sm font-medium text-slate-300 block mb-2">WhatsApp Asistido</span>
+                            <p className="text-xs text-slate-400">
+                                Usa el botón superior para el grupo, o los iconos individuales para chats privados.
+                            </p>
                         </div>
-                    )}
+
+                        {aiInsight && (
+                            <div className="mt-4 p-4 bg-black/20 rounded-xl border border-white/5 text-sm text-slate-300">
+                                <div className="flex items-center justify-between mb-2">
+                                    <p className="font-bold text-fuchsia-400">Mensaje Generado:</p>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(aiInsight);
+                                                toast.success('Mensaje copiado al portapapeles');
+                                            }}
+                                            className="text-xs px-2 py-1 bg-white/5 hover:bg-white/10 rounded transition-colors text-slate-400 cursor-pointer"
+                                        >
+                                            Copiar
+                                        </button>
+                                        <a
+                                            href={`https://wa.me/?text=${encodeURIComponent(aiInsight)}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-xs px-2 py-1 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded transition-colors cursor-pointer"
+                                        >
+                                            WhatsApp
+                                        </a>
+                                    </div>
+                                </div>
+                                <div className="whitespace-pre-line overflow-y-auto max-h-[200px]">
+                                    {aiInsight}
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
-            {/* Recent History (Mini view) */}
             <div className="mb-8">
-                <h3 className="text-slate-400 text-sm font-medium mb-4 uppercase tracking-wider">Últimos Pagos Registrados</h3>
+                <h3 className="text-slate-400 text-sm font-medium mb-4 uppercase tracking-wider">Últimos Pagos</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {payHistory && payHistory.length > 0 ? payHistory.map((h: any) => (
                         <div key={h.id} className="p-4 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between">
                             <div>
                                 <p className="text-white font-medium">{h.charges?.members?.name}</p>
                                 <p className="text-xs text-slate-400">
-                                    {h.charges?.platforms?.name} • {format(new Date(h.payment_date), 'dd MMM yyyy', { locale: es })}
+                                    {h.charges?.platforms?.name} • {format(new Date(h.payment_date), 'dd MMM', { locale: es })}
                                 </p>
                             </div>
                             <span className="text-emerald-400 font-bold">{formatCurrency(h.amount_paid)}</span>
                         </div>
                     )) : (
-                        <p className="text-slate-500 text-sm">No hay historial reciente.</p>
+                        <p className="text-slate-500 text-sm">Sin historial.</p>
                     )}
                 </div>
             </div>

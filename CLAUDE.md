@@ -4,26 +4,29 @@ Este archivo proporciona orientación a Claude Code (claude.ai/code) al trabajar
 
 ## Descripción del Proyecto
 
-Strimo es un SaaS de gestión de suscripciones compartidas (Netflix, Spotify, etc.) entre miembros. Permite dividir costos, generar cobros mensuales, rastrear pagos, e incluye funciones con IA para análisis financiero y generación de mensajes de cobro por WhatsApp.
+Strimo es un SaaS para gestionar suscripciones compartidas (Netflix, Spotify, HBO, etc.) entre grupos de personas. Permite dividir costos equitativamente o por rotación, generar cobros mensuales automáticos, rastrear pagos, y enviar recordatorios personalizados por WhatsApp y email usando IA.
 
 ## Comandos de Desarrollo
 
 ```bash
-npm run dev      # Inicia servidor de desarrollo Vite con HMR
-npm run build    # Compilación TypeScript + build de producción Vite
-npm run lint     # Ejecuta ESLint
+npm run dev      # Servidor de desarrollo Vite con HMR
+npm run build    # Compilación TypeScript + build producción
+npm run lint     # Ejecutar ESLint
 npm run preview  # Vista previa del build de producción
 ```
 
 ## Stack Tecnológico
 
-- **Frontend:** React 19, TypeScript, Vite
-- **Estilos:** Tailwind CSS 4 con tema oscuro (estética glassmorphism)
-- **Estado:** TanStack React Query para estado del servidor, Context API para auth
-- **Backend:** Supabase (auth, base de datos, realtime)
-- **Formularios:** React Hook Form
-- **IA:** Google Gemini API para insights y generación de mensajes
-- **Animaciones:** Framer Motion
+- **Frontend:** React 19, TypeScript 5.9, Vite 7
+- **Estilos:** Tailwind CSS 4 (tema oscuro, glassmorphism)
+- **Estado:** TanStack React Query 5, Context API (auth)
+- **Backend:** Supabase (PostgreSQL, Auth, Edge Functions)
+- **Formularios:** React Hook Form 7
+- **IA:** Groq API con LLaMA 3.3-70B para mensajes personalizados
+- **Email:** Resend API
+- **Animaciones:** Framer Motion 12
+- **Iconos:** Lucide React
+- **Notificaciones:** Sonner (toasts)
 
 ## Arquitectura
 
@@ -31,44 +34,108 @@ npm run preview  # Vista previa del build de producción
 ```
 src/
 ├── components/
-│   ├── ui/          # Componentes reutilizables (Button, Input, Modal)
-│   ├── forms/       # Componentes de formulario con React Hook Form
-│   └── Layout.tsx   # Layout con navegación sidebar
-├── pages/           # Páginas de rutas (Dashboard, Members, Platforms, Login)
-├── providers/       # AuthProvider context
+│   ├── ui/                    # Button, Input, Modal
+│   ├── forms/                 # MemberForm, PlatformForm
+│   ├── Layout.tsx             # Sidebar con navegación
+│   ├── ProtectedRoute.tsx     # Guard de autenticación
+│   └── PlatformMembersModal.tsx
+├── pages/
+│   ├── Dashboard.tsx          # Cobros, pagos, recordatorios IA
+│   ├── Members.tsx            # CRUD miembros
+│   ├── Platforms.tsx          # CRUD plataformas
+│   └── Login.tsx              # Autenticación
+├── providers/
+│   └── AuthProvider.tsx       # Contexto de Supabase Auth
 └── lib/
-    ├── supabase.ts       # Cliente de Supabase
-    ├── database.types.ts # Tipos auto-generados de Supabase
-    └── billing.ts        # Lógica de generación de cobros
+    ├── supabase.ts            # Cliente Supabase
+    ├── database.types.ts      # Tipos auto-generados
+    ├── billing.ts             # Lógica de generación de cobros
+    ├── emailTemplate.ts       # Plantilla HTML para emails
+    └── whatsappTemplate.ts    # Formato de mensajes WhatsApp
+
+supabase/
+└── functions/
+    └── process-reminders/     # Edge Function para recordatorios automáticos
+        └── index.ts
+```
+
+### Esquema de Base de Datos
+
+| Tabla | Descripción |
+|-------|-------------|
+| **members** | Perfiles (name, email, phone, avatar_url, active) |
+| **platforms** | Servicios (name, cost, billing_cycle, payment_strategy, icon_url, total_slots) |
+| **member_subscriptions** | Relación miembro-plataforma (rotation_order, share_cost) |
+| **charges** | Cobros mensuales (amount, month, year, due_date, status: pending/paid) |
+| **payment_history** | Pagos completados (amount_paid, payment_date, method, notes) |
+
+### Estrategias de Cobro
+
+**Equal (Equitativo):**
+```typescript
+share = platform.cost / members.length
+// Cada miembro paga su parte
+```
+
+**Rotation (Rotación):**
+```typescript
+globalMonthIndex = (year * 12) + (month - 1)
+payerIndex = globalMonthIndex % members.length
+// Un miembro paga todo, rotando cada mes según rotation_order
 ```
 
 ### Patrones Clave
 
-**Obtención de Datos:** Todas las operaciones de datos usan React Query con query keys como `['platforms']`, `['members']`, `['charges', 'pending']`. Las mutaciones invalidan queries relacionadas al completarse.
+**Query Keys de React Query:**
+```typescript
+['platforms']                    // Todas las plataformas
+['members']                      // Todos los miembros
+['charges', 'pending']           // Cobros pendientes
+['subscriptions', platformId]    // Suscripciones de una plataforma
+['payment_history']              // Historial de pagos
+```
 
-**Autenticación:** Supabase Auth envuelto en `AuthProvider`. Las rutas están protegidas mediante el componente `ProtectedRoute`.
+**Formato de moneda (COP):**
+```typescript
+new Intl.NumberFormat('es-CO', {
+  style: 'currency',
+  currency: 'COP',
+  maximumFractionDigits: 0
+}).format(amount)
+```
 
-**Estrategias de Facturación:**
-- `equal` - Costo dividido equitativamente entre todos los miembros suscritos
-- `rotation` - Cada mes un miembro diferente paga el costo total (usa el campo `rotation_order` y módulo: `(year * 12 + month - 1) % members.length`)
-
-### Esquema de Base de Datos (Supabase)
-
-- **members** - Perfiles de usuario (name, email, phone, active)
-- **platforms** - Servicios de suscripción (name, cost, billing_cycle, payment_strategy, slots)
-- **member_subscriptions** - Vincula miembros con plataformas (incluye rotation_order, share_cost)
-- **charges** - Cobros mensuales (member_id, platform_id, amount, month, year, status: pending/paid)
-- **payment_history** - Registros de pagos completados
+**WhatsApp Links:**
+```typescript
+`https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`
+```
 
 ## Variables de Entorno
 
-Requeridas en `.env.local`:
+Crear archivo `.env.local`:
 ```
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
-VITE_GEMINI_API_KEY=
+VITE_SUPABASE_URL=https://[proyecto].supabase.co
+VITE_SUPABASE_ANON_KEY=eyJ...
+VITE_GROQ_API_KEY=gsk_...
+VITE_RESEND_API_KEY=re_...
 ```
 
-## Idioma de la UI
+## Rutas de la Aplicación
 
-La interfaz de la aplicación está en español. Los mensajes toast, etiquetas y texto visible al usuario deben permanecer en español.
+| Ruta | Página | Acceso |
+|------|--------|--------|
+| `/login` | Login/Registro | Público |
+| `/` | Dashboard | Protegido |
+| `/members` | Gestión de miembros | Protegido |
+| `/platforms` | Gestión de plataformas | Protegido |
+
+## Funcionalidades Principales
+
+1. **Dashboard:** Generar cobros, ver pendientes agrupados por miembro, marcar pagos, historial
+2. **Recordatorios IA:** Genera mensajes personalizados con Groq para WhatsApp individual o grupal
+3. **Email automático:** Edge Function envía recordatorios T-5, T0, T+5 días
+4. **Gestión de slots:** Controla cuántos miembros puede tener cada plataforma
+5. **Reordenamiento de rotación:** UI con flechas para cambiar orden de pago
+
+## Idioma
+
+La UI está completamente en español. Mantener todos los textos, toasts y mensajes en español.
