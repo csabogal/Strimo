@@ -1,22 +1,37 @@
 # Strimo
 
-Sistema de gestión de suscripciones compartidas. Permite dividir costos de servicios como Netflix, Spotify, HBO entre grupos de personas, con cobros automáticos, seguimiento de pagos y recordatorios inteligentes por WhatsApp y email.
+Sistema de gestión de suscripciones compartidas. Divide costos de servicios como Netflix, Spotify, HBO entre grupos de personas, con cobros automáticos, seguimiento de pagos y recordatorios inteligentes por WhatsApp y email.
 
 ## Características
 
 - **Gestión de plataformas:** Agrega servicios de streaming con costo, ciclo de facturación y slots disponibles
-- **Gestión de miembros:** Registra personas con sus datos de contacto
+- **Gestión de miembros:** Registra personas con datos de contacto (email, teléfono, avatar)
 - **Estrategias de cobro:** División equitativa o rotación mensual
 - **Generación de cobros:** Crea cobros mensuales automáticamente
-- **Seguimiento de pagos:** Marca pagos como completados con historial
-- **Recordatorios IA:** Mensajes personalizados generados con LLaMA 3.3-70B
-- **Integración WhatsApp:** Enlaces directos para cobrar
-- **Emails automáticos:** Recordatorios programados vía Edge Functions
+- **Seguimiento de pagos:** Marca pagos como completados con historial detallado
+- **Recordatorios IA:** Mensajes personalizados generados con LLaMA 3.3-70B (Groq)
+- **Integración WhatsApp:** Enlaces directos para enviar cobros
+- **Emails automáticos:** Recordatorios programados vía Supabase Edge Functions
+
+## Stack Tecnológico
+
+| Tecnología | Versión | Uso |
+|------------|---------|-----|
+| React | 19.2.0 | Framework UI |
+| TypeScript | 5.9.3 | Tipado estático |
+| Vite | 7.2.4 | Bundler y dev server |
+| Tailwind CSS | 4.1.18 | Estilos utility-first |
+| TanStack Query | 5.90.17 | Estado del servidor |
+| React Router | 7.12.0 | Navegación SPA |
+| React Hook Form | 7.71.1 | Formularios |
+| Supabase | 2.90.1 | Backend (DB + Auth) |
+| Groq SDK | 0.37.0 | IA (LLaMA 3.3-70B) |
+| Framer Motion | 12.26.2 | Animaciones |
 
 ## Requisitos Previos
 
 - **Node.js** 18.0 o superior
-- **npm** 9.0 o superior (incluido con Node.js)
+- **npm** 9.0 o superior
 - Cuenta en [Supabase](https://supabase.com) (gratis)
 - API Key de [Groq](https://console.groq.com) (gratis)
 - API Key de [Resend](https://resend.com) (opcional, para emails)
@@ -37,13 +52,8 @@ cd strimo
 #### Linux (Ubuntu/Debian)
 
 ```bash
-# Usando NodeSource
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt-get install -y nodejs
-
-# Verificar instalación
-node --version
-npm --version
 ```
 
 #### Linux (Fedora/RHEL)
@@ -61,25 +71,25 @@ sudo pacman -S nodejs npm
 #### macOS
 
 ```bash
-# Usando Homebrew
+# Con Homebrew
 brew install node
 
-# O descarga el instalador desde https://nodejs.org
+# O descarga desde https://nodejs.org
 ```
 
 #### Windows
 
-1. Descarga el instalador desde [https://nodejs.org](https://nodejs.org) (versión LTS recomendada)
-2. Ejecuta el instalador y sigue las instrucciones
-3. Reinicia la terminal después de instalar
+1. Descarga el instalador desde [nodejs.org](https://nodejs.org) (versión LTS)
+2. Ejecuta el instalador
+3. Reinicia la terminal
 
-**Verificar instalación (todos los SO):**
+**Verificar instalación:**
 ```bash
-node --version   # Debe mostrar v18.x o superior
-npm --version    # Debe mostrar 9.x o superior
+node --version   # v18.x o superior
+npm --version    # 9.x o superior
 ```
 
-### 3. Instalar dependencias del proyecto
+### 3. Instalar dependencias
 
 ```bash
 npm install
@@ -89,7 +99,7 @@ npm install
 
 1. Crea un proyecto en [supabase.com](https://supabase.com)
 
-2. Ve a **SQL Editor** y ejecuta el siguiente script para crear las tablas:
+2. Ve a **SQL Editor** y ejecuta:
 
 ```sql
 -- Tabla de miembros
@@ -116,7 +126,7 @@ CREATE TABLE platforms (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Tabla de suscripciones (relación miembro-plataforma)
+-- Tabla de suscripciones
 CREATE TABLE member_subscriptions (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   member_id UUID REFERENCES members(id) ON DELETE CASCADE,
@@ -153,19 +163,19 @@ CREATE TABLE payment_history (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Habilitar Row Level Security (opcional pero recomendado)
+-- Habilitar Row Level Security
 ALTER TABLE members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE platforms ENABLE ROW LEVEL SECURITY;
 ALTER TABLE member_subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE charges ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payment_history ENABLE ROW LEVEL SECURITY;
 
--- Políticas básicas (permitir todo para usuarios autenticados)
-CREATE POLICY "Allow all for authenticated users" ON members FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "Allow all for authenticated users" ON platforms FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "Allow all for authenticated users" ON member_subscriptions FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "Allow all for authenticated users" ON charges FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "Allow all for authenticated users" ON payment_history FOR ALL USING (auth.role() = 'authenticated');
+-- Políticas para usuarios autenticados
+CREATE POLICY "Allow all for authenticated" ON members FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow all for authenticated" ON platforms FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow all for authenticated" ON member_subscriptions FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow all for authenticated" ON charges FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow all for authenticated" ON payment_history FOR ALL USING (auth.role() = 'authenticated');
 ```
 
 3. Ve a **Settings > API** y copia:
@@ -174,7 +184,7 @@ CREATE POLICY "Allow all for authenticated users" ON payment_history FOR ALL USI
 
 ### 5. Configurar variables de entorno
 
-Crea el archivo `.env.local` en la raíz del proyecto:
+Crea `.env.local` en la raíz:
 
 ```bash
 # Linux/macOS
@@ -182,12 +192,9 @@ touch .env.local
 
 # Windows (PowerShell)
 New-Item .env.local -ItemType File
-
-# Windows (CMD)
-type nul > .env.local
 ```
 
-Agrega las siguientes variables:
+Contenido:
 
 ```env
 VITE_SUPABASE_URL=https://tu-proyecto.supabase.co
@@ -196,39 +203,33 @@ VITE_GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxxx
 VITE_RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxx
 ```
 
-**Obtener las API Keys:**
-
+**Obtener API Keys:**
 - **Supabase:** Dashboard > Settings > API
-- **Groq:** [console.groq.com/keys](https://console.groq.com/keys) (crear cuenta gratis)
-- **Resend:** [resend.com/api-keys](https://resend.com/api-keys) (opcional, para emails)
+- **Groq:** [console.groq.com/keys](https://console.groq.com/keys)
+- **Resend:** [resend.com/api-keys](https://resend.com/api-keys) (opcional)
 
-### 6. Ejecutar el proyecto
-
-#### Modo desarrollo
+### 6. Ejecutar
 
 ```bash
+# Desarrollo
 npm run dev
-```
+# Abre http://localhost:5173
 
-La aplicación estará disponible en: **http://localhost:5173**
-
-#### Build de producción
-
-```bash
+# Producción
 npm run build
 npm run preview
 ```
 
 ---
 
-## Comandos Disponibles
+## Comandos
 
 | Comando | Descripción |
 |---------|-------------|
-| `npm run dev` | Inicia servidor de desarrollo con HMR |
-| `npm run build` | Compila TypeScript y genera build de producción |
-| `npm run preview` | Sirve el build de producción localmente |
-| `npm run lint` | Ejecuta ESLint para verificar código |
+| `npm run dev` | Servidor de desarrollo con HMR |
+| `npm run build` | Build de producción |
+| `npm run preview` | Sirve el build localmente |
+| `npm run lint` | Ejecuta ESLint |
 
 ---
 
@@ -237,34 +238,36 @@ npm run preview
 ```
 strimo/
 ├── src/
-│   ├── components/      # Componentes React reutilizables
-│   ├── pages/           # Páginas de la aplicación
-│   ├── providers/       # Context providers (Auth)
-│   └── lib/             # Utilidades y cliente Supabase
+│   ├── components/      # Componentes React (ui/, forms/, Layout)
+│   ├── pages/           # Páginas (Login, Dashboard, Members, Platforms)
+│   ├── providers/       # Context providers (AuthProvider)
+│   ├── lib/             # Utilidades (supabase, billing, templates)
+│   ├── App.tsx          # Router principal
+│   └── main.tsx         # Entry point
 ├── supabase/
-│   └── functions/       # Edge Functions (recordatorios)
-├── public/              # Archivos estáticos
+│   └── functions/       # Edge Functions (process-reminders)
+├── public/              # Assets estáticos
 ├── .env.local           # Variables de entorno (crear)
-└── package.json         # Dependencias y scripts
+└── package.json         # Dependencias
 ```
 
 ---
 
-## Uso Básico
+## Uso
 
-1. **Registrarse/Iniciar sesión** en `/login`
+1. **Registrarse** en `/login`
 2. **Agregar plataformas** (Netflix, Spotify, etc.) en `/platforms`
-3. **Agregar miembros** (personas del grupo) en `/members`
-4. **Asignar miembros** a plataformas desde la tarjeta de cada plataforma
-5. **Generar cobros** del mes actual desde el Dashboard
-6. **Enviar recordatorios** por WhatsApp o email
+3. **Agregar miembros** del grupo en `/members`
+4. **Asignar miembros** a plataformas desde cada tarjeta
+5. **Generar cobros** del mes desde el Dashboard
+6. **Enviar recordatorios** por WhatsApp o email con IA
 7. **Marcar como pagado** cuando recibas el pago
 
 ---
 
 ## Solución de Problemas
 
-### Error: "port already in use"
+### Puerto en uso
 
 ```bash
 # Linux/macOS
@@ -276,38 +279,18 @@ netstat -ano | findstr :5173
 taskkill /PID <PID> /F
 ```
 
-### Error: "module not found"
+### Módulo no encontrado
 
 ```bash
 rm -rf node_modules package-lock.json
 npm install
 ```
 
-### Error de conexión a Supabase
+### Error de Supabase
 
-1. Verifica que las variables en `.env.local` sean correctas
-2. Asegúrate de que el proyecto en Supabase esté activo
-3. Revisa que las tablas estén creadas correctamente
-
-### La aplicación no carga
-
-1. Limpia la caché del navegador
-2. Verifica la consola del navegador (F12) para errores
-3. Reinicia el servidor de desarrollo
-
----
-
-## Tecnologías
-
-- [React 19](https://react.dev)
-- [TypeScript](https://www.typescriptlang.org)
-- [Vite](https://vitejs.dev)
-- [Tailwind CSS 4](https://tailwindcss.com)
-- [Supabase](https://supabase.com)
-- [TanStack Query](https://tanstack.com/query)
-- [React Hook Form](https://react-hook-form.com)
-- [Framer Motion](https://www.framer.com/motion)
-- [Groq API](https://groq.com)
+1. Verifica `.env.local`
+2. Asegúrate que el proyecto esté activo
+3. Verifica que las tablas existan
 
 ---
 
