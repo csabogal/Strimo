@@ -79,10 +79,21 @@ export const Layout = () => {
                     </nav>
                 </div>
 
-                <button className="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-red-400 transition-colors rounded-xl hover:bg-red-500/5 cursor-pointer">
-                    <LogOut size={20} />
-                    <span className="font-medium">Cerrar Sesión</span>
-                </button>
+                <div className="space-y-4">
+                    <button className="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-red-400 transition-colors rounded-xl hover:bg-red-500/5 cursor-pointer">
+                        <LogOut size={20} />
+                        <span className="font-medium">Cerrar Sesión</span>
+                    </button>
+
+                    <div className="px-4 pt-4 border-t border-white/5">
+                        <p className="text-[10px] text-slate-500 font-medium uppercase tracking-widest mb-1">
+                            © {new Date().getFullYear()} Strimo
+                        </p>
+                        <p className="text-[11px] text-indigo-400/80 font-semibold tracking-wide">
+                            Developed by csabogal
+                        </p>
+                    </div>
+                </div>
             </aside>
 
             {/* Mobile Bottom Navigation */}

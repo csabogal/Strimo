@@ -162,13 +162,13 @@ export const Platforms = () => {
                                 <div className="flex gap-2 ml-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                                     <button
                                         onClick={() => handleEdit(platform)}
-                                        className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center bg-white/10 rounded-lg hover:bg-indigo-500 hover:text-white transition-colors text-slate-400 active:bg-indigo-600"
+                                        className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center bg-white/10 rounded-lg hover:bg-indigo-500 hover:text-white transition-colors text-slate-400 active:bg-indigo-600 cursor-pointer"
                                     >
                                         <Pencil size={18} />
                                     </button>
                                     <button
                                         onClick={() => handleDelete(platform.id)}
-                                        className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center bg-white/10 rounded-lg hover:bg-red-500 hover:text-white transition-colors text-slate-400 active:bg-red-600"
+                                        className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center bg-white/10 rounded-lg hover:bg-red-500 hover:text-white transition-colors text-slate-400 active:bg-red-600 cursor-pointer"
                                     >
                                         <Trash2 size={18} />
                                     </button>

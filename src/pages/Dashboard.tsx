@@ -148,17 +148,17 @@ export const Dashboard = () => {
 
     const [sendingEmailFor, setSendingEmailFor] = useState<string | null>(null)
 
-    const handleSendPremiumManualEmail = async (chargeId: string) => {
-        setSendingEmailFor(chargeId)
+    const handleSendPremiumManualEmail = async (memberId: string) => {
+        setSendingEmailFor(memberId)
         try {
             const { data, error } = await supabase.functions.invoke('process-reminders', {
-                body: { charge_id: chargeId }
+                body: { member_id: memberId }
             })
 
             if (error) throw error
 
             if (data?.processed > 0) {
-                toast.success('Correo Premium enviado exitosamente')
+                toast.success('Correo consolidado enviado exitosamente')
                 queryClient.invalidateQueries({ queryKey: ['charges'] })
             } else {
                 toast.error('No se pudo enviar el correo')
@@ -360,12 +360,12 @@ El mensaje debe:
                                         )}
                                         {group.member?.email && (
                                             <button
-                                                onClick={() => handleSendPremiumManualEmail(group.chargeIds[0])}
-                                                disabled={sendingEmailFor === group.chargeIds[0]}
+                                                onClick={() => handleSendPremiumManualEmail(group.memberId)}
+                                                disabled={sendingEmailFor === group.memberId}
                                                 className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg transition-colors disabled:opacity-50 cursor-pointer active:bg-blue-500/30"
-                                                title="Enviar Correo Premium (Directo)"
+                                                title="Enviar Correo Premium (Consolidado)"
                                             >
-                                                <Mail size={18} className={sendingEmailFor === group.chargeIds[0] ? 'animate-pulse' : ''} />
+                                                <Mail size={18} className={sendingEmailFor === group.memberId ? 'animate-pulse' : ''} />
                                             </button>
                                         )}
                                         <Button

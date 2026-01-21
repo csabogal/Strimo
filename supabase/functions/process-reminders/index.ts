@@ -21,13 +21,12 @@ const formatCurrency = (amount: number) => {
 
 const generatePremiumEmail = (params: {
   memberName: string,
-  platformName: string,
-  amount: number,
-  dueDate: string,
+  charges: { platformName: string, amount: number, dueDate: string }[],
+  totalAmount: number,
   reminderType: 'pre' | 'due' | 'overdue' | 'manual',
   aiMessage: string
 }) => {
-  const { memberName, platformName, amount, dueDate, reminderType, aiMessage } = params
+  const { memberName, charges, totalAmount, reminderType, aiMessage } = params
   
   let typeText = '📢 Recordatorio de Pago';
   let typeColor = '#6366f1';
@@ -35,6 +34,15 @@ const generatePremiumEmail = (params: {
   if (reminderType === 'pre') typeText = '⏰ Pago próximo en 5 días';
   else if (reminderType === 'due') { typeText = '📢 ¡Hoy vence tu pago!'; typeColor = '#f59e0b'; }
   else if (reminderType === 'overdue') { typeText = '⚠️ Pago vencido'; typeColor = '#ef4444'; }
+
+  const chargesHtml = charges.map(c => `
+    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+        <td style="padding: 10px 0; color: #94a3b8;">${c.platformName}</td>
+        <td style="padding: 10px 0; text-align: right; color: white;">${formatCurrency(c.amount)}</td>
+    </tr>
+  `).join('');
+
+  const oldestDueDate = charges.reduce((min, c) => c.dueDate < min ? c.dueDate : min, charges[0].dueDate);
 
   return `
 <!DOCTYPE html>
@@ -62,19 +70,31 @@ const generatePremiumEmail = (params: {
             </div>
 
             <div style="background: rgba(15,23,42,0.5); border-radius: 12px; padding: 20px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 24px;">
-                <table style="width: 100%;">
-                    <tr>
-                        <td style="color: #94a3b8;">Plataforma:</td>
-                        <td style="text-align: right; color: white;"><strong>${platformName}</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="color: #94a3b8;">Monto:</td>
-                        <td style="text-align: right; color: #34d399; font-size: 20px;"><strong>${formatCurrency(amount)}</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="color: #94a3b8;">Vencimiento:</td>
-                        <td style="text-align: right; color: white;">${dueDate}</td>
-                    </tr>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                            <th style="text-align: left; padding-bottom: 10px; color: #94a3b8; font-size: 12px; text-transform: uppercase;">Plataforma</th>
+                            <th style="text-align: right; padding-bottom: 10px; color: #94a3b8; font-size: 12px; text-transform: uppercase;">Monto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${chargesHtml}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td style="padding-top: 20px; color: white; font-weight: bold; font-size: 14px;">TOTAL A PAGAR:</td>
+                            <td style="padding-top: 20px; text-align: right; color: #34d399; font-size: 24px;"><strong>${formatCurrency(totalAmount)}</strong></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2" style="padding-top: 20px;">
+                                <div style="background: rgba(245, 158, 11, 0.1); border: 1px dashed rgba(245, 158, 11, 0.3); border-radius: 10px; padding: 12px; text-align: center;">
+                                    <span style="color: #f59e0b; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">
+                                        🗓️ Fecha límite de pago: ${new Date(oldestDueDate).toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' })}
+                                    </span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
 
@@ -93,7 +113,6 @@ const generatePremiumEmail = (params: {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -109,59 +128,100 @@ serve(async (req) => {
   try {
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!)
     
-    // Check if it's a manual trigger for a specific charge
     let manualChargeId = null;
+    let manualMemberId = null;
+
     if (req.method === 'POST') {
       const body = await req.json().catch(() => ({}));
       manualChargeId = body.charge_id;
+      manualMemberId = body.member_id;
     }
 
+    // Fetch pending charges
     let query = supabase
       .from('charges')
-      .select('*, members(name, email), platforms(name)')
+      .select('*, members(id, name, email), platforms(name)')
       .eq('status', 'pending');
 
     if (manualChargeId) {
-      query = query.eq('id', manualChargeId);
+      // If a specific charge is sent, we find the member and then all their pending charges
+      const { data: triggerCharge } = await supabase
+        .from('charges')
+        .select('member_id')
+        .eq('id', manualChargeId)
+        .single();
+      
+      if (triggerCharge) {
+        query = query.eq('member_id', triggerCharge.member_id);
+      }
+    } else if (manualMemberId) {
+      query = query.eq('member_id', manualMemberId);
     }
 
     const { data: charges, error: fetchError } = await query;
-
     if (fetchError) throw fetchError
+
+    if (!charges || charges.length === 0) {
+      return new Response(JSON.stringify({ success: true, processed: 0, message: 'No charges to process' }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      })
+    }
+
+    // Group charges by member for processing
+    const memberGroups = charges.reduce((acc, charge) => {
+      const mId = charge.members.id;
+      if (!acc[mId]) {
+        acc[mId] = {
+          member: charge.members,
+          charges: []
+        };
+      }
+      acc[mId].charges.push(charge);
+      return acc;
+    }, {} as Record<string, any>);
 
     const now = new Date()
     now.setHours(0, 0, 0, 0)
     
     const results = []
     
-    for (const charge of charges || []) {
-      const member = charge.members
-      const platform = charge.platforms
-      if (!member?.email || !platform?.name) continue
+    for (const mId in memberGroups) {
+      const group = memberGroups[mId];
+      const member = group.member;
+      const memberCharges = group.charges;
+
+      if (!member?.email) continue;
+
+      const totalAmount = memberCharges.reduce((sum: number, c: any) => sum + Number(c.amount), 0);
+      const platformsText = memberCharges.map((c: any) => c.platforms.name).join(', ');
 
       let reminderType: 'pre' | 'due' | 'overdue' | 'manual' | null = null
 
-      if (manualChargeId) {
+      if (manualChargeId || manualMemberId) {
         reminderType = 'manual';
       } else {
-        const dueDate = new Date(charge.due_date)
-        dueDate.setHours(0, 0, 0, 0)
-        const diffDays = Math.floor((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+        // For auto processing, we use the oldest due date to determine the type
+        const oldestDueDate = new Date(memberCharges.reduce((min: string, c: any) => c.due_date < min ? c.due_date : min, memberCharges[0].due_date));
+        oldestDueDate.setHours(0, 0, 0, 0);
+        
+        const diffDays = Math.floor((oldestDueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
         
         if (diffDays === 5) reminderType = 'pre'
         else if (diffDays === 0) reminderType = 'due'
         else if (diffDays === -5) reminderType = 'overdue'
+
+        // Check if we already sent this type of reminder recently for ANY of these charges
+        const alreadySent = memberCharges.some((c: any) => c.last_reminder_type === reminderType);
+        if (alreadySent) reminderType = null;
       }
 
-      if (!reminderType || (reminderType !== 'manual' && charge.last_reminder_type === reminderType)) {
-        continue;
-      }
+      if (!reminderType) continue;
 
       const prompt = `Actúa como el asistente de cobros de "Strimo". 
-Escribe un mensaje CORTO y personalizado para ${member.name} sobre su suscripción a ${platform.name}.
-No incluyas el monto ni la fecha en este texto, solo un saludo y un recordatorio amable.
-Situación: ${reminderType === 'pre' ? 'Faltan 5 días' : reminderType === 'due' ? 'Vence hoy' : reminderType === 'overdue' ? 'Atrasado' : 'Recordatorio general'}.
-Sé profesional pero cercano. Dame el JSON con "subject" y "message".`
+Escribe un mensaje CORTO y amable para ${member.name} sobre sus suscripciones pendientes: ${platformsText}.
+No incluyas los montos individuales ni el total en este texto, solo un saludo y un recordatorio de que tiene estas cuentas pendientes.
+Situación: ${reminderType === 'pre' ? 'Faltan 5 días para el vencimiento' : reminderType === 'due' ? 'Vencen hoy' : reminderType === 'overdue' ? 'Están atrasadas' : 'Recordatorio general'}.
+Sé profesional pero muy cercano. Dame el JSON con "subject" y "message".`
 
       const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
@@ -178,9 +238,12 @@ Sé profesional pero cercano. Dame el JSON con "subject" y "message".`
 
       const emailHtml = generatePremiumEmail({
         memberName: member.name,
-        platformName: platform.name,
-        amount: charge.amount,
-        dueDate: charge.due_date,
+        charges: memberCharges.map((c: any) => ({
+          platformName: c.platforms.name,
+          amount: c.amount,
+          dueDate: c.due_date
+        })),
+        totalAmount,
         reminderType,
         aiMessage: aiContent.message
       })
@@ -197,15 +260,16 @@ Sé profesional pero cercano. Dame el JSON con "subject" y "message".`
       })
 
       if (resendRes.ok) {
+        const chargeIds = memberCharges.map((c: any) => c.id);
         await supabase
           .from('charges')
           .update({
             last_reminder_at: new Date().toISOString(),
             last_reminder_type: reminderType
           })
-          .eq('id', charge.id)
+          .in('id', chargeIds);
         
-        results.push({ charge_id: charge.id, status: 'sent', type: reminderType })
+        results.push({ member_id: mId, charges_count: chargeIds.length, status: 'sent', type: reminderType })
       }
     }
 
