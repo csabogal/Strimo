@@ -189,7 +189,7 @@ Sé profesional pero cercano. Dame el JSON con "subject" y "message".`
         method: "POST",
         headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          from: "Strimo <onboarding@resend.dev>",
+          from: "Strimo <recordatorios@strimoapp.site>",
           to: [member.email],
           subject: aiContent.subject,
           html: emailHtml
