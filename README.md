@@ -294,6 +294,12 @@ npm install
 
 ---
 
+## Autor
+
+Desarrollado por **csabogal**
+
+---
+
 ## Licencia
 
 MIT
