@@ -167,59 +167,91 @@ serve(async (req) => {
       })
     }
 
-    // Group charges by member for processing
-    const memberGroups = charges.reduce((acc, charge) => {
-      const mId = charge.members.id;
-      if (!acc[mId]) {
-        acc[mId] = {
-          member: charge.members,
-          charges: []
-        };
-      }
-      acc[mId].charges.push(charge);
-      return acc;
-    }, {} as Record<string, any>);
-
     const now = new Date()
     now.setHours(0, 0, 0, 0)
+
+    // Grouping Strategy
+    // For Manual: Group by Member ID (Consolidate ALL pending)
+    // For Auto: Group by Member ID + Reminder Type (Only strictly matching dates)
     
+    interface GroupedCharges {
+        [key: string]: {
+            member: any,
+            charges: any[],
+            reminderType: 'pre' | 'due' | 'overdue' | 'manual'
+        }
+    }
+
+    const groups: GroupedCharges = {};
+
+    charges.forEach(charge => {
+        const mId = charge.members.id;
+        
+        // Manual Mode: Consolidate everything for this member
+        if (manualChargeId || manualMemberId) {
+            const key = `${mId}_manual`;
+            if (!groups[key]) {
+                groups[key] = {
+                    member: charge.members,
+                    charges: [],
+                    reminderType: 'manual'
+                };
+            }
+            groups[key].charges.push(charge);
+            return; // Skip auto logic
+        }
+
+        // Auto Mode: Determine strict status per charge
+        const dueDate = new Date(charge.due_date);
+        dueDate.setHours(0,0,0,0);
+        
+        // Calculate diff days: Due - Now
+        // 5 days left = 5
+        // Due today = 0
+        // Overdue by 5 days = -5
+        const diffTime = dueDate.getTime() - now.getTime();
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+        let type: 'pre' | 'due' | 'overdue' | null = null;
+        
+        if (diffDays === 5) type = 'pre';
+        else if (diffDays === 0) type = 'due';
+        else if (diffDays === -5) type = 'overdue';
+
+        // If no relevant status today, skip
+        if (!type) return;
+
+        // If already sent this specific type for this charge, skip
+        if (charge.last_reminder_type === type) return;
+
+        // Group by Member + Type
+        const key = `${mId}_${type}`;
+        if (!groups[key]) {
+            groups[key] = {
+                member: charge.members,
+                charges: [],
+                reminderType: type
+            };
+        }
+        groups[key].charges.push(charge);
+    });
+
     const results = []
     
-    for (const mId in memberGroups) {
-      const group = memberGroups[mId];
+    for (const key in groups) {
+      const group = groups[key];
       const member = group.member;
       const memberCharges = group.charges;
+      const reminderType = group.reminderType;
 
-      if (!member?.email) continue;
+      if (!member?.email || memberCharges.length === 0) continue;
 
       const totalAmount = memberCharges.reduce((sum: number, c: any) => sum + Number(c.amount), 0);
       const platformsText = memberCharges.map((c: any) => c.platforms.name).join(', ');
 
-      let reminderType: 'pre' | 'due' | 'overdue' | 'manual' | null = null
-
-      if (manualChargeId || manualMemberId) {
-        reminderType = 'manual';
-      } else {
-        // For auto processing, we use the oldest due date to determine the type
-        const oldestDueDate = new Date(memberCharges.reduce((min: string, c: any) => c.due_date < min ? c.due_date : min, memberCharges[0].due_date));
-        oldestDueDate.setHours(0, 0, 0, 0);
-        
-        const diffDays = Math.floor((oldestDueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-        
-        if (diffDays === 5) reminderType = 'pre'
-        else if (diffDays === 0) reminderType = 'due'
-        else if (diffDays === -5) reminderType = 'overdue'
-
-        // Check if we already sent this type of reminder recently for ANY of these charges
-        const alreadySent = memberCharges.some((c: any) => c.last_reminder_type === reminderType);
-        if (alreadySent) reminderType = null;
-      }
-
-      if (!reminderType) continue;
-
       const prompt = `Actúa como el asistente de cobros de "Strimo". 
 Escribe un mensaje CORTO y amable para ${member.name} sobre sus suscripciones pendientes: ${platformsText}.
-No incluyas los montos individuales ni el total en este texto, solo un saludo y un recordatorio de que tiene estas cuentas pendientes.
+No incluyas saludos iniciales (como 'Hola Camilo'), ni montos, ni totales. Ve directamente a la información importante del recordatorio, ya que el diseño del correo ya incluye un saludo en la parte superior.
 Situación: ${reminderType === 'pre' ? 'Faltan 5 días para el vencimiento' : reminderType === 'due' ? 'Vencen hoy' : reminderType === 'overdue' ? 'Están atrasadas' : 'Recordatorio general'}.
 Sé profesional pero muy cercano. Dame el JSON con "subject" y "message".`
 
@@ -261,15 +293,24 @@ Sé profesional pero muy cercano. Dame el JSON con "subject" y "message".`
 
       if (resendRes.ok) {
         const chargeIds = memberCharges.map((c: any) => c.id);
+        const updatePayload: any = {
+           last_reminder_at: new Date().toISOString()
+        };
+        
+        // Only update type for auto-reminders (to track state)
+        // For manual, we might not want to overwrite the strict 'pre'/'due' state?
+        // Actually, if we send a manual reminder, 'last_reminder_type' becomes 'manual'.
+        // Then 'pre' logic will see 'manual' != 'pre', so it WILL send 'pre'.
+        // This is arguably good (auto-reminders shouldn't be skipped just because I manually poked you).
+        // Let's stick to updating type always.
+        updatePayload.last_reminder_type = reminderType;
+
         await supabase
           .from('charges')
-          .update({
-            last_reminder_at: new Date().toISOString(),
-            last_reminder_type: reminderType
-          })
+          .update(updatePayload)
           .in('id', chargeIds);
         
-        results.push({ member_id: mId, charges_count: chargeIds.length, status: 'sent', type: reminderType })
+        results.push({ member_id: member.id, charges_count: chargeIds.length, status: 'sent', type: reminderType })
       }
     }
 
