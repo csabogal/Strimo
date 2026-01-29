@@ -9,12 +9,18 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { generateWhatsAppMessage } from '../lib/whatsappTemplate'
+import { ChargeSelectionModal } from '../components/ChargeSelectionModal'
 
 export const Dashboard = () => {
     const [aiInsight, setAiInsight] = useState<string>('')
     const queryClient = useQueryClient()
     const [isGeneratingReminder, setIsGeneratingReminder] = useState(false)
     const [isGeneratingCharges, setIsGeneratingCharges] = useState(false)
+    const [selectionModal, setSelectionModal] = useState<{
+        isOpen: boolean
+        mode: 'whatsapp' | 'payment'
+        group: any
+    } | null>(null)
 
     // Fetch Platforms
     const { data: platforms } = useQuery({
@@ -95,11 +101,60 @@ export const Dashboard = () => {
 
     const groupedChargesList = Object.values(groupedCharges || {})
 
-    const handleMarkAsPaidGroup = async (group: any) => {
-        if (!confirm(`¿Confirmar pago TOTAL de ${formatCurrency(group.totalAmount)} por ${group.member?.name}?`)) return;
+    // Modal handlers
+    const handleOpenWhatsAppSelection = (group: any) => {
+        setSelectionModal({
+            isOpen: true,
+            mode: 'whatsapp',
+            group
+        })
+    }
+
+    const handleOpenPaymentSelection = (group: any) => {
+        setSelectionModal({
+            isOpen: true,
+            mode: 'payment',
+            group
+        })
+    }
+
+    const handleConfirmWhatsApp = (chargeIds: string[]) => {
+        const group = selectionModal?.group
+        if (!group) return
+
+        // Filter charges to only include selected ones
+        const selectedCharges = group.charges.filter((c: any) => chargeIds.includes(c.id))
+        const selectedTotal = selectedCharges.reduce((sum: number, c: any) => sum + c.amount, 0)
+
+        const message = generateWhatsAppMessage({
+            memberName: group.member?.name || 'Miembro',
+            charges: selectedCharges.map((c: any) => ({
+                platformName: c.platforms?.name || 'Plataforma',
+                amount: c.amount
+            })),
+            totalAmount: selectedTotal,
+            dueDate: format(new Date(group.dueDate), 'dd/MM/yyyy')
+        })
+
+        const phone = group.member.phone.replace(/\D/g, '')
+        window.open(`https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`, '_blank')
+
+        setSelectionModal(null)
+    }
+
+    const handleConfirmPayment = async (chargeIds: string[]) => {
+        const group = selectionModal?.group
+        if (!group) return
+
+        const selectedCharges = group.charges.filter((c: any) => chargeIds.includes(c.id))
+        const selectedTotal = selectedCharges.reduce((sum: number, c: any) => sum + c.amount, 0)
+
+        if (!confirm(`¿Confirmar pago de ${formatCurrency(selectedTotal)} por ${group.member?.name}?`)) {
+            return
+        }
 
         try {
-            await Promise.all(group.charges.map(async (charge: any) => {
+            await Promise.all(selectedCharges.map(async (charge: any) => {
                 const { error: chargeError } = await supabase
                     .from('charges')
                     .update({ status: 'paid' })
@@ -114,18 +169,19 @@ export const Dashboard = () => {
                         amount_paid: charge.amount,
                         payment_date: new Date().toISOString(),
                         method: 'manual',
-                        notes: 'Pago grupal registrado desde Dashboard'
+                        notes: 'Pago registrado desde Dashboard'
                     })
 
                 if (historyError) throw historyError
             }))
 
-            toast.success(`Pagos de ${group.member?.name} registrados`)
+            toast.success(`${selectedCharges.length} pago(s) de ${group.member?.name} registrado(s)`)
             queryClient.invalidateQueries({ queryKey: ['charges'] })
             queryClient.invalidateQueries({ queryKey: ['payment_history'] })
+            setSelectionModal(null)
 
         } catch (error: any) {
-            console.error('Error processing group payment:', error)
+            console.error('Error processing payment:', error)
             toast.error('Error al registrar algunos pagos')
         }
     }
@@ -339,19 +395,7 @@ El mensaje debe:
                                     <div className="flex flex-wrap gap-2 sm:justify-end pt-3 sm:pt-0 border-t sm:border-t-0 border-white/5 sm:mt-0 mt-3">
                                         {group.member?.phone && (
                                             <button
-                                                onClick={() => {
-                                                    const message = generateWhatsAppMessage({
-                                                        memberName: group.member.name,
-                                                        charges: group.charges.map((c: any) => ({
-                                                            platformName: c.platforms?.name || 'Plataforma',
-                                                            amount: c.amount
-                                                        })),
-                                                        totalAmount: group.totalAmount,
-                                                        dueDate: format(new Date(group.dueDate), 'dd/MM/yyyy')
-                                                    });
-                                                    const phone = group.member.phone.replace(/\D/g, '');
-                                                    window.open(`https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`, '_blank');
-                                                }}
+                                                onClick={() => handleOpenWhatsAppSelection(group)}
                                                 className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg transition-colors cursor-pointer active:bg-green-500/30"
                                                 title="WhatsApp Premium"
                                             >
@@ -370,7 +414,7 @@ El mensaje debe:
                                         )}
                                         <Button
                                             size="sm"
-                                            onClick={() => handleMarkAsPaidGroup(group)}
+                                            onClick={() => handleOpenPaymentSelection(group)}
                                             title="Marcar como pagado"
                                         >
                                             <CheckCircle2 size={18} />
@@ -468,6 +512,23 @@ El mensaje debe:
                     )}
                 </div>
             </div>
+
+            {/* Charge Selection Modal */}
+            {selectionModal && (
+                <ChargeSelectionModal
+                    isOpen={selectionModal.isOpen}
+                    onClose={() => setSelectionModal(null)}
+                    mode={selectionModal.mode}
+                    memberName={selectionModal.group.member?.name || 'Miembro'}
+                    charges={selectionModal.group.charges.map((c: any) => ({
+                        id: c.id,
+                        platform: c.platforms?.name || 'Plataforma',
+                        amount: c.amount,
+                        dueDate: c.due_date
+                    }))}
+                    onConfirm={selectionModal.mode === 'whatsapp' ? handleConfirmWhatsApp : handleConfirmPayment}
+                />
+            )}
         </div>
     )
 }
