@@ -168,9 +168,6 @@ Crear archivo `.env.local`:
 VITE_SUPABASE_URL=https://[proyecto].supabase.co
 VITE_SUPABASE_ANON_KEY=eyJ...
 VITE_GROQ_API_KEY=gsk_...
-
-# Opcional (solo si usas Edge Function de emails)
-VITE_RESEND_API_KEY=re_...
 ```
 
 **Edge Function Secrets (configurar en Supabase Dashboard):**

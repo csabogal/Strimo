@@ -200,13 +200,12 @@ Contenido:
 VITE_SUPABASE_URL=https://tu-proyecto.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 VITE_GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxxx
-VITE_RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxx
 ```
 
 **Obtener API Keys:**
 - **Supabase:** Dashboard > Settings > API
 - **Groq:** [console.groq.com/keys](https://console.groq.com/keys)
-- **Resend:** [resend.com/api-keys](https://resend.com/api-keys) (opcional)
+- **Resend:** [resend.com/api-keys](https://resend.com/api-keys) (solo para la Edge Function, configurar como secret en Supabase)
 
 ### 6. Ejecutar
 

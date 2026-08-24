@@ -15,6 +15,8 @@ export type Database = {
           created_at: string
           due_date: string
           id: string
+          last_reminder_at: string | null
+          last_reminder_type: string | null
           member_id: string | null
           month: number
           platform_id: string | null
@@ -26,6 +28,8 @@ export type Database = {
           created_at?: string
           due_date: string
           id?: string
+          last_reminder_at?: string | null
+          last_reminder_type?: string | null
           member_id?: string | null
           month: number
           platform_id?: string | null
@@ -37,6 +41,8 @@ export type Database = {
           created_at?: string
           due_date?: string
           id?: string
+          last_reminder_at?: string | null
+          last_reminder_type?: string | null
           member_id?: string | null
           month?: number
           platform_id?: string | null
